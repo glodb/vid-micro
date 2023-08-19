@@ -5,50 +5,65 @@ import (
 	"net/http"
 	"sync"
 
+	"com.code.sso/com.code.sso/app/middlewares"
+	"com.code.sso/com.code.sso/config"
+	"com.code.sso/com.code.sso/httpHandler/basecontrollers"
 	"com.code.sso/com.code.sso/httpHandler/baserouter"
-	"com.code.sso/com.code.sso/httpHandler/middlewares"
+	"com.code.sso/com.code.sso/httpHandler/responses"
 	"github.com/gorilla/mux"
 )
 
-type MuxServer struct {
+type muxServer struct {
+	base *mux.Router
 }
 
 var (
-	instance *MuxServer
+	instance *muxServer
 	once     sync.Once
 )
 
-//Singleton. Returns a single object of Factory
-func GetInstance() *MuxServer {
+//Singleton. Returns a single object
+func GetInstance() *muxServer {
 	// var instance
 	once.Do(func() {
-		instance = &MuxServer{}
+		instance = &muxServer{}
 		instance.setup()
 	})
 	return instance
 }
 
-func (u *MuxServer) setup() {
-	corsMiddleware, apiMiddleware := middlewares.CORSMiddleware{}, middlewares.ApiMiddleware{}
-	base := &mux.Router{}
-	base.Use(corsMiddleware.GetHandlerFunc, apiMiddleware.GetHandlerFunc)
-
-	baserouter.GetInstance().SetRouter("base", base)
-
-	sessionMiddleware := middlewares.SessionMiddleware{}
-	open := &mux.Router{}
-	open.Use(corsMiddleware.GetHandlerFunc, apiMiddleware.GetHandlerFunc, sessionMiddleware.GetHandlerFunc)
-	baserouter.GetInstance().SetRouter("open", base)
-
-	authMiddleware := middlewares.AuthMiddleware{}
-	auth := &mux.Router{}
-	auth.Use(corsMiddleware.GetHandlerFunc, apiMiddleware.GetHandlerFunc, sessionMiddleware.GetHandlerFunc, authMiddleware.GetHandlerFunc)
-
-	baserouter.GetInstance().SetRouter("auth", auth)
-
+func (u *muxServer) HandleBlank(w http.ResponseWriter, r *http.Request) {
+	responses.GetInstance().WriteJsonResponse(w, r, responses.WELCOME_TO_SSO, nil, nil)
 }
 
-func (u *MuxServer) Start() {
-	log.Println("Server listening on :8080")
-	http.ListenAndServe(":8080", nil)
+func (u *muxServer) setup() {
+	corsMiddleware := middlewares.CORSMiddleware{}
+	u.base = &mux.Router{}
+
+	u.base.Use(corsMiddleware.GetHandlerFunc)
+	u.base.HandleFunc("/", u.HandleBlank).Methods("GET")
+
+	baserouter.GetInstance().SetRouter("base", u.base)
+
+	sessionMiddleware := middlewares.SessionMiddleware{}
+	open := u.base.PathPrefix("/").Subrouter()
+	open.Use(sessionMiddleware.GetHandlerFunc)
+	baserouter.GetInstance().SetRouter("open", open)
+
+	authMiddleware := middlewares.AuthMiddleware{}
+	auth := open.PathPrefix("/").Subrouter()
+	auth.Use(authMiddleware.GetHandlerFunc)
+
+	baserouter.GetInstance().SetRouter("auth", auth)
+}
+
+func (u *muxServer) Start() {
+	log.Println("Server listening on ", config.GetInstance().Server.Address, ":", config.GetInstance().Server.Port)
+	basecontrollers.GetInstance().RegisterControllers()
+
+	http.Handle("/", u.base)
+	err := http.ListenAndServe(config.GetInstance().Server.Address+":"+config.GetInstance().Server.Port, nil)
+	if err != nil {
+		log.Println("Error in running server:", err)
+	}
 }

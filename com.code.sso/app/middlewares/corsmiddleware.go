@@ -1,7 +1,10 @@
 package middlewares
 
 import (
+	"errors"
 	"net/http"
+
+	"com.code.sso/com.code.sso/httpHandler/responses"
 )
 
 type CORSMiddleware struct {
@@ -15,7 +18,7 @@ func (u *CORSMiddleware) GetHandlerFunc(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
 		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
+			responses.GetInstance().WriteJsonResponse(w, r, responses.OPTIONS_NOT_ALLOWED, errors.New("Method Options is not allowed in Cors Middleware"), nil)
 			return
 		}
 

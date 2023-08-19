@@ -27,7 +27,7 @@ func (u *baseRouterHandler) SetRouter(name string, router *mux.Router) {
 	u.router[name] = router
 }
 
-func (u *baseRouterHandler) GetBaseRouter(secret string) *mux.Router {
+func (u *baseRouterHandler) GetBaseRouter() *mux.Router {
 	return u.router["base"]
 }
 
