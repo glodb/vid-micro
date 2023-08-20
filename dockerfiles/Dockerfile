@@ -22,6 +22,7 @@ FROM alpine:latest
 WORKDIR /app
 
 COPY --from=build_base /app/setup /app/setup
+COPY --from=build_base /app/sso /app/
 
 # This container exposes port 8080 to the outside world
 EXPOSE 8080

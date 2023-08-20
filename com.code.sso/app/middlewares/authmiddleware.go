@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
 
@@ -24,7 +23,6 @@ func (u *AuthMiddleware) GetHandlerFunc(next http.Handler) http.Handler {
 			responses.GetInstance().WriteJsonResponse(w, r, responses.BASIC_AUTH_FAILED, errors.New("Authorization header is not basic"), nil)
 			return
 		}
-		log.Println(auth)
 
 		payload, _ := base64.StdEncoding.DecodeString(auth[1])
 		pair := strings.SplitN(string(payload), ":", 2)
@@ -67,7 +65,6 @@ func (u *AuthMiddleware) GetHandlerFunc(next http.Handler) http.Handler {
 				sessionModel.UpdatedAt = (val.(int))
 			}
 
-			log.Println(sessionModel, pair)
 			if pair[0] == sessionModel.Email && pair[1] == sessionModel.Token {
 				ctx := context.WithValue(r.Context(), "session", sessionModel)
 				next.ServeHTTP(w, r.WithContext(ctx))

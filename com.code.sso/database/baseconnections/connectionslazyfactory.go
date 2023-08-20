@@ -15,7 +15,6 @@ var once sync.Once
 
 //Singleton. Returns a single object of Factory
 //This is pure lazy factory, doesnot even create db connection till dbname is specifically passed
-//This also helps in flyweight design pattern
 func GetInstance() *dbConnections {
 	// var instance
 	once.Do(func() {

@@ -9,6 +9,6 @@ import (
 
 func main() {
 	log.Println("starting server")
-	config.GetInstance().Setup()
+	config.GetInstance().Setup("setup/prod.json")
 	httpHandler.GetInstance().Start()
 }

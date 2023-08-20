@@ -173,7 +173,6 @@ func (u *UserController) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hashedEntered := utils.HashPassword(enteredPassword, user.Salt)
-	log.Println(hashedEntered, user.Password, user.Salt, user, rowsCount)
 
 	if hashedEntered != user.Password {
 		responses.GetInstance().WriteJsonResponse(w, r, responses.PASSWORD_INCORRECT, errors.New("Password doesn't matched"), nil)
@@ -226,7 +225,6 @@ func (u *UserController) HandleCallback(w http.ResponseWriter, r *http.Request) 
 	}
 	ctx := context.WithValue(r.Context(), "session", sessionModel)
 
-	log.Println("session", state)
 	token, err := googleOauthConfig.Exchange(r.Context(), code)
 	if err != nil {
 		log.Println("Token exchange error:", err)

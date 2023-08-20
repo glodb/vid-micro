@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"errors"
-	"log"
 	"net/http"
 
 	"com.code.sso/com.code.sso/app/models"
@@ -52,7 +51,6 @@ func (u *SessionController) HandleCreateSession(w http.ResponseWriter, r *http.R
 
 	//ignoring err because library said it will always give a response
 	session, err := sessionshandler.GetInstance().GetSession().Get(r, sessionId)
-	log.Println(err, sessionId)
 	session.Values["sessionId"] = sessionId
 
 	err = session.Save(r, w)

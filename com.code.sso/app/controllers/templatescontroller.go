@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"html/template"
-	"log"
 	"net/http"
 
 	"com.code.sso/com.code.sso/config"
@@ -39,7 +38,6 @@ func (u *TemplatesController) handleSignup(w http.ResponseWriter, r *http.Reques
 
 	tmpl, err := template.ParseFiles("com.code.sso/app/view/signup.html")
 	if err != nil {
-		log.Println(err)
 		http.Error(w, "Error parsing template", http.StatusInternalServerError)
 		return
 	}
@@ -55,7 +53,6 @@ func (u *TemplatesController) handleSignupEmail(w http.ResponseWriter, r *http.R
 
 	tmpl, err := template.ParseFiles("com.code.sso/app/view/signupemail.html")
 	if err != nil {
-		log.Println(err)
 		http.Error(w, "Error parsing template", http.StatusInternalServerError)
 		return
 	}
@@ -71,7 +68,6 @@ func (u *TemplatesController) handleUpdateProfile(w http.ResponseWriter, r *http
 
 	tmpl, err := template.ParseFiles("com.code.sso/app/view/updateprofile.html")
 	if err != nil {
-		log.Println(err)
 		http.Error(w, "Error parsing template", http.StatusInternalServerError)
 		return
 	}
@@ -87,7 +83,6 @@ func (u *TemplatesController) handleDashboard(w http.ResponseWriter, r *http.Req
 
 	tmpl, err := template.ParseFiles("com.code.sso/app/view/dashboard.html")
 	if err != nil {
-		log.Println(err)
 		http.Error(w, "Error parsing template", http.StatusInternalServerError)
 		return
 	}
@@ -103,7 +98,6 @@ func (u *TemplatesController) handleLogin(w http.ResponseWriter, r *http.Request
 
 	tmpl, err := template.ParseFiles("com.code.sso/app/view/login.html")
 	if err != nil {
-		log.Println(err)
 		http.Error(w, "Error parsing template", http.StatusInternalServerError)
 		return
 	}

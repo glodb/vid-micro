@@ -30,8 +30,8 @@ func GetInstance() *config {
 	return instance
 }
 
-func (c *config) Setup() {
-	configFile, err := os.Open("setup/prod.json")
+func (c *config) Setup(path string) {
+	configFile, err := os.Open(path)
 	if err != nil {
 		log.Println("Error opening config file:", err)
 		return

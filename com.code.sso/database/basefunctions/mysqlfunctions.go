@@ -42,7 +42,6 @@ func (u *MySqlFunctions) EnsureIndex(dbName basetypes.DBName, collectionName bas
 	}
 
 	query += columns + ");"
-	log.Println("Create Table:", conn, query)
 	_, err := conn.Exec(query)
 	return err
 }
@@ -81,7 +80,6 @@ func (u *MySqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.C
 	query += " VALUES(" + strings.Join(placeholders, ", ") + ")"
 
 	_, err := conn.Exec(query, values...)
-	log.Println(query, conn, values)
 	return err
 }
 func (u *MySqlFunctions) FindOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}, result interface{}) (*sql.Rows, error) {
@@ -103,7 +101,6 @@ func (u *MySqlFunctions) FindOne(dbName basetypes.DBName, collectionName basetyp
 
 	query += whereClause
 	rows, err := conn.Query(query, values...)
-	log.Println(query, values)
 
 	return rows, err
 }
@@ -113,6 +110,6 @@ func (u *MySqlFunctions) UpdateOne(dbName basetypes.DBName, collectionName baset
 	return err
 }
 func (u *MySqlFunctions) DeleteOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query interface{}) error {
-	log.Println("DeleteOne MySql")
+	log.Println("Unimplemented DeleteOne MySql")
 	return nil
 }
