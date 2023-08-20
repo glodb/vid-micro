@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Button Example</title>
+</head>
+<body>
+    <h1>User Sign-Up</h1>
+    <p>New users can sign up using one of the following methods:</p>
+
+    <button id="googleSignUp">Sign Up/Login with Google</button>
+    <button id="emailSignUp">Sign Up with Email</button>
+    <button id="loginEmail">Login with Email</button>
+
+    <script>
+        window.addEventListener('pageshow', function(event) {
+            // Check if the event's persisted property is true (page is loaded from cache)
+            var email = localStorage.getItem('email')
+            var token = localStorage.getItem('token')
+
+            if (email && email != "" && token && token != "") {
+                window.location.href = '/dashboard';
+            }
+        });
+        var sessionId
+        retrieveData()
+        function retrieveData() {
+            var storedData = localStorage.getItem('sessionId');
+            if (storedData === "" || storedData === null) {
+                fetch("/api/createSession", {
+                    method: 'GET', // or 'GET', 'PUT', etc.
+                    headers: {
+                        'Content-Type': 'application/json'
+                        // You might need additional headers here
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    saveData(data.data.sessionId)
+                    console.log(data);
+                })
+                window.location.href = '/signup';
+            }
+            sessionId = storedData
+        }
+        function saveData(data) {
+            localStorage.setItem('sessionId', data);
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            var button1 = document.getElementById('googleSignUp');
+            var button2 = document.getElementById('emailSignUp');
+            var button3 = document.getElementById('loginEmail');
+
+            button1.addEventListener('click', function() {
+                window.location.href = '/api/googleLogin?sessionId='+sessionId;
+            });
+
+            button2.addEventListener('click', function() {
+                window.location.href = '/signupemail';
+            });
+
+            button3.addEventListener('click', function() {
+                window.location.href = '/login';
+            });
+        });
+    </script>
+</body>
+</html>

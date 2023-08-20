@@ -58,6 +58,8 @@ func (c *controllersObject) registerControllers(key string, registerApis bool) {
 		c.controllers[key] = &controllers.UserController{BaseControllerFactory: c, ValidatorInterface: &validators.UserValidator{}}
 	case Session:
 		c.controllers[key] = &controllers.SessionController{BaseControllerFactory: c, ValidatorInterface: &validators.SessionValidator{}}
+	case Templates:
+		c.controllers[key] = &controllers.TemplatesController{BaseControllerFactory: c, ValidatorInterface: &validators.SessionValidator{}}
 
 	}
 	funcs, _ := basefunctions.GetInstance().GetFunctions(basetypes.MYSQL, c.controllers[key].GetDBName())

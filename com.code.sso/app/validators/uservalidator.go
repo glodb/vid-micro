@@ -14,6 +14,8 @@ type UserValidator struct {
 func (u *UserValidator) Validate(apiName string, data interface{}) error {
 	userData := data.(models.User)
 	switch apiName {
+	case "/api/login":
+		fallthrough
 	case "/api/registerUser":
 		pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$`
 		length := utf8.RuneCountInString(userData.Email)

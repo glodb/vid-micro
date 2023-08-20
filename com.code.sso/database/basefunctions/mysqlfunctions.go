@@ -18,8 +18,33 @@ func (u *MySqlFunctions) GetFunctions() BaseFucntionsInterface {
 	return u
 }
 
-func (u *MySqlFunctions) EnsureIndex(dbName basetypes.DBName, collectionName basetypes.CollectionName, unique bool) error {
-	return nil
+func (u *MySqlFunctions) EnsureIndex(dbName basetypes.DBName, collectionName basetypes.CollectionName, data interface{}) error {
+	conn := baseconnections.GetInstance().GetConnection(basetypes.MYSQL).GetDB(basetypes.MYSQL).(*sql.DB)
+	query := `CREATE TABLE IF NOT EXISTS ` + string(collectionName) + ` (`
+	dataValue := reflect.ValueOf(data)
+	dataType := dataValue.Type()
+
+	if dataType.Kind() != reflect.Struct {
+		return errors.New("Required a struct for data")
+	}
+
+	columns := ""
+
+	for i := 0; i < dataType.NumField(); i++ {
+		field := dataType.Field(i)
+		tags := strings.Split(field.Tag.Get("db"), ",")
+
+		if columns != "" {
+			columns += ","
+		}
+
+		columns += strings.Join(tags, " ")
+	}
+
+	query += columns + ");"
+	log.Println("Create Table:", conn, query)
+	_, err := conn.Exec(query)
+	return err
 }
 
 func (u *MySqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.CollectionName, data interface{}) error {
@@ -39,7 +64,7 @@ func (u *MySqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.C
 
 	for i := 0; i < dataType.NumField(); i++ {
 		field := dataType.Field(i)
-		tag := field.Tag.Get("db")
+		tag := strings.Split(field.Tag.Get("db"), ",")[0]
 
 		if tag == "" {
 			continue
@@ -59,13 +84,33 @@ func (u *MySqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.C
 	log.Println(query, conn, values)
 	return err
 }
-func (u *MySqlFunctions) FindOne(basetypes.DBName, basetypes.CollectionName, interface{}, interface{}) error {
-	log.Println("FindOne MySql")
-	return nil
+func (u *MySqlFunctions) FindOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}, result interface{}) (*sql.Rows, error) {
+	conn := baseconnections.GetInstance().GetConnection(basetypes.MYSQL).GetDB(basetypes.MYSQL).(*sql.DB)
+	query := "SELECT * FROM " + string(collectionName)
+
+	whereClause := ""
+	values := make([]interface{}, 0)
+
+	for key, val := range condition {
+		if whereClause != "" {
+			whereClause += " AND "
+		} else {
+			whereClause += " WHERE "
+		}
+		whereClause += key + "= ? "
+		values = append(values, val)
+	}
+
+	query += whereClause
+	rows, err := conn.Query(query, values...)
+	log.Println(query, values)
+
+	return rows, err
 }
-func (u *MySqlFunctions) UpdateOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query interface{}, data interface{}, upsert bool) error {
-	log.Println("UpdateOne MySql")
-	return nil
+func (u *MySqlFunctions) UpdateOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query string, data []interface{}, upsert bool) error {
+	conn := baseconnections.GetInstance().GetConnection(basetypes.MYSQL).GetDB(basetypes.MYSQL).(*sql.DB)
+	_, err := conn.Exec(query, data...)
+	return err
 }
 func (u *MySqlFunctions) DeleteOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query interface{}) error {
 	log.Println("DeleteOne MySql")

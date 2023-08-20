@@ -23,6 +23,17 @@ const (
 	MALFORMED_JSON         = 1009
 	VALIDATION_FAILED      = 1010
 	DB_ERROR               = 1011
+	CREATE_HASH_FAILED     = 1012
+	BASIC_AUTH_FAILED      = 1013
+	GET_USER_SUCCESS       = 1014
+	GET_USER_FAILED        = 1015
+	USERNAME_EXISTS_FAILED = 1016
+	PASSWORD_INCORRECT     = 1017
+	LOGIN_SUCCESS          = 1018
+	UPDATE_FAILED          = 1019
+	UPDATE_SUCCESS         = 1020
+	LOGOUT_SUCCESS         = 1021
+	LOGOUT_FAILED          = 1022
 )
 
 type Responses struct {
@@ -58,6 +69,15 @@ func (u *Responses) InitResponses() {
 	u.responses[MALFORMED_JSON] = "Json Decoding failed"
 	u.responses[VALIDATION_FAILED] = "Validation failed"
 	u.responses[DB_ERROR] = "DB Error in query"
+	u.responses[CREATE_HASH_FAILED] = "Failed creating hash"
+	u.responses[BASIC_AUTH_FAILED] = "Basic auth failed"
+	u.responses[GET_USER_SUCCESS] = "Success in getting user"
+	u.responses[GET_USER_FAILED] = "Failure in getting user"
+	u.responses[USERNAME_EXISTS_FAILED] = "Username entered does not exist"
+	u.responses[PASSWORD_INCORRECT] = "Password is incorrect"
+	u.responses[LOGIN_SUCCESS] = "Login Success"
+	u.responses[UPDATE_FAILED] = "Updation Failed"
+	u.responses[UPDATE_SUCCESS] = "Updateion Success"
 }
 
 // GetResponse returns the message for the particular response code
@@ -97,6 +117,8 @@ func (u *Responses) WriteJsonResponse(w http.ResponseWriter, r *http.Request, co
 		status = http.StatusNotAcceptable
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+
 	w.WriteHeader(status)
 
 	if err != nil {

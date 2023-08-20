@@ -39,7 +39,7 @@ func (u *SessionController) SetBaseFunctions(inter basefunctions.BaseFucntionsIn
 	u.BaseFucntionsInterface = inter
 }
 
-func (u *SessionController) handleCreateSession(w http.ResponseWriter, r *http.Request) {
+func (u *SessionController) HandleCreateSession(w http.ResponseWriter, r *http.Request) {
 	sessionId, err := utils.GenerateUUID()
 	modelSession := models.Session{
 		SessionId: sessionId,
@@ -58,7 +58,6 @@ func (u *SessionController) handleCreateSession(w http.ResponseWriter, r *http.R
 	err = session.Save(r, w)
 	if err != nil {
 		responses.GetInstance().WriteJsonResponse(w, r, responses.CREATE_SESSION_FAILED, err, nil)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -66,5 +65,5 @@ func (u *SessionController) handleCreateSession(w http.ResponseWriter, r *http.R
 }
 
 func (u SessionController) RegisterApis() {
-	baserouter.GetInstance().GetBaseRouter().HandleFunc("/api/createSession", u.handleCreateSession).Methods("GET")
+	baserouter.GetInstance().GetBaseRouter().HandleFunc("/api/createSession", u.HandleCreateSession).Methods("GET")
 }

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+		<html>
+		<head>
+			<title>Welcome to Login Page</title>
+		</head>
+		<body>
+			<h1>Login Page</h1>
+			<form id="login-form">
+				<label for="email">Email:</label>
+				<input type="email" name="email" required><br>
+				<label for="password">Password:</label>
+				<input type="password" name="password" required><br>
+				<button type="button" onclick="login()">Login</button>
+                <button type="button" onclick="signup()">Back</button>
+			</form>
+			<p id="login-response" style="color: red;"></p>
+			<script>
+                window.addEventListener('pageshow', function(event) {
+                    // Check if the event's persisted property is true (page is loaded from cache)
+                    var email = localStorage.getItem('email')
+                    var token = localStorage.getItem('token')
+
+                    if (email && email != "" && token && token != "") {
+                        window.location.href = '/dashboard';
+                    }
+
+                    var storedData = localStorage.getItem('sessionId');
+                    if (!storedData && storedData === "") {
+                        window.location.href = '/signup';
+                    }
+                });
+				function login() {
+					var email = document.querySelector('input[name="email"]').value;
+					var password = document.querySelector('input[name="password"]').value;
+					
+					fetch('/api/login', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+                            "ssoSession": localStorage.getItem("sessionId")
+						},
+						body: JSON.stringify({ email: email, password: password })
+					})
+					.then(response => response.json())
+					.then(data => {
+						if (data.code === 1018) {
+                            localStorage.setItem("email", email)
+                            localStorage.setItem("token", data.data)
+							window.location.href = '/dashboard';
+						} else {
+							document.getElementById('login-response').innerText = data.message;
+						}
+					})
+					.catch(error => {
+						console.error('Error:', error);
+					});
+				}
+                function signup() {
+                    window.location.href = '/signup';
+                }
+			</script>
+		</body>
+		</html>

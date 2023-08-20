@@ -1,6 +1,10 @@
 package basefunctions
 
-import "com.code.sso/com.code.sso/database/basetypes"
+import (
+	"database/sql"
+
+	"com.code.sso/com.code.sso/database/basetypes"
+)
 
 /*
 * flyweight interface to separate
@@ -9,9 +13,9 @@ import "com.code.sso/com.code.sso/database/basetypes"
  */
 type BaseFucntionsInterface interface {
 	GetFunctions() BaseFucntionsInterface
-	EnsureIndex(basetypes.DBName, basetypes.CollectionName, bool) error
+	EnsureIndex(basetypes.DBName, basetypes.CollectionName, interface{}) error
 	Add(basetypes.DBName, basetypes.CollectionName, interface{}) error
-	FindOne(basetypes.DBName, basetypes.CollectionName, interface{}, interface{}) error
-	UpdateOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query interface{}, data interface{}, upsert bool) error
+	FindOne(basetypes.DBName, basetypes.CollectionName, map[string]interface{}, interface{}) (*sql.Rows, error)
+	UpdateOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query string, data []interface{}, upsert bool) error
 	DeleteOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query interface{}) error
 }
