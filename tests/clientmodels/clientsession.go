@@ -1,6 +1,6 @@
 package clientmodels
 
-import "com.code.sso/com.code.sso/app/models"
+import "com.code.vidmicro/com.code.vidmicro/app/models"
 
 type ClientSession struct {
 	Code    int            `json:"code"`

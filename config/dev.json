@@ -1,0 +1,24 @@
+{
+    "database": {
+        "host": "127.0.0.1",
+        "port": "3306",
+        "username": "root",
+        "password": "ANSKk08aPEDbFjDO",
+        "dbname": "sso"
+    },
+    "sessionKey": "spiderman",
+    "natsServer":"nats://127.0.0.1:4222",
+    "publisherBatchSize": 100,
+    "isProduction": false,
+    "registeredTopics":["vidmicro.content"],
+    "printWarning": true,
+    "printInfo": true,
+    "sessionSecret": "sessionSecret",
+    "redis": {
+        "redisMaxConnections": 100,
+        "redisMaxIdleConnections": 50,
+        "redisCon": "tcp",
+        "redisAddress": "localhost:6379",
+        "printRedis": true
+    }
+}

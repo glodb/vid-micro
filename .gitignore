@@ -6,6 +6,8 @@
 # Golang vendor files
 vendor/
 
+.vscode
+__debug*
 # Unit test reports
 TEST*.xml
 
