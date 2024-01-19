@@ -1,0 +1,28 @@
+{
+    "database": {
+        "dbname": "titles"
+    },
+    "microServiceName": "titlesService",
+    "address": "localhost:8081",
+    "controllers": [],
+    "allowDB": true,
+    "serviceLogName": "titles",
+    "publishingTopics": [
+        "vidmicro.title"
+    ],
+    "subscribedTopics": {
+    },
+    "apis": {
+        "/api/createSession":["POST"],
+        "/api/register":["GET"]
+    },
+    "sessionSecret": "*mongonormalcontrollers.SessionController",
+    "acl": {
+        "user": [
+        ],
+        "admin": [
+        ],
+        "manager": [
+        ]
+    }
+}

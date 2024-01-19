@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"com.code.vidmicro/com.code.vidmicro/app/models"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseinterfaces"
@@ -25,6 +26,7 @@ func (u TemplateController) GetCollectionName() basetypes.CollectionName {
 }
 
 func (u TemplateController) DoIndexing() error {
+	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.Session{})
 	return nil
 }
 

@@ -31,6 +31,7 @@ func (u SessionController) GetCollectionName() basetypes.CollectionName {
 }
 
 func (u SessionController) DoIndexing() error {
+	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.Session{})
 	return nil
 }
 

@@ -6,7 +6,6 @@
     "address": "localhost:8080",
     "controllers": ["User", "Session"],
     "allowDB": true,
-    "serviceMicroName": "webservergin-dev.fifo",
     "serviceLogName": "auth",
     "publishingTopics": [
         "vidmicro.content"
