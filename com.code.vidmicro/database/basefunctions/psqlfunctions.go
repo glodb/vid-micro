@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"com.code.vidmicro/com.code.vidmicro/database/baseconnections"
@@ -25,7 +26,7 @@ func (u *PSqlFunctions) EnsureIndex(dbName basetypes.DBName, collectionName base
 	dataType := dataValue.Type()
 
 	if dataType.Kind() != reflect.Struct {
-		return errors.New("Required a struct for data")
+		return errors.New("required a struct for data")
 	}
 
 	columns := ""
@@ -46,24 +47,29 @@ func (u *PSqlFunctions) EnsureIndex(dbName basetypes.DBName, collectionName base
 	return err
 }
 
-func (u *PSqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.CollectionName, data interface{}) error {
-	conn := baseconnections.GetInstance().GetConnection(basetypes.MYSQL).GetDB(basetypes.PSQL).(*sql.DB)
+func (u *PSqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.CollectionName, data interface{}) (int64, error) {
+	conn := baseconnections.GetInstance().GetConnection(basetypes.PSQL).GetDB(basetypes.PSQL).(*sql.DB)
 	query := "INSERT INTO " + string(collectionName)
 
 	dataValue := reflect.ValueOf(data)
 	dataType := dataValue.Type()
 
 	if dataType.Kind() != reflect.Struct {
-		return errors.New("Required a struct for data")
+		return -1, errors.New("required a struct for data")
 	}
 
 	var columns []string
 	var placeholders []string
 	values := make([]interface{}, 0)
 
+	placeholderCount := 1
+
 	for i := 0; i < dataType.NumField(); i++ {
 		field := dataType.Field(i)
-		tag := strings.Split(field.Tag.Get("db"), ",")[0]
+		if strings.Contains(strings.ToUpper(field.Tag.Get("db")), "SERIAL") {
+			continue
+		}
+		tag := strings.Split(field.Tag.Get("db"), " ")[0]
 
 		if tag == "" {
 			continue
@@ -73,42 +79,71 @@ func (u *PSqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.Co
 		values = append(values, value)
 
 		columns = append(columns, tag)
-		placeholders = append(placeholders, "?")
+		placeholders = append(placeholders, "$"+strconv.FormatInt(int64(placeholderCount), 10))
+		placeholderCount++
 	}
 
 	query += "(" + strings.Join(columns, ", ") + ")"
-	query += " VALUES(" + strings.Join(placeholders, ", ") + ")"
+	query += " VALUES(" + strings.Join(placeholders, ", ") + ") RETURNING id"
 
-	_, err := conn.Exec(query, values...)
-	return err
+	var insertedID int64
+	err := conn.QueryRow(
+		query,
+		values...,
+	).Scan(&insertedID)
+
+	if err != nil {
+		return -1, err
+	}
+	return insertedID, err
 }
-func (u *PSqlFunctions) FindOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}, result interface{}) (*sql.Rows, error) {
-	conn := baseconnections.GetInstance().GetConnection(basetypes.MYSQL).GetDB(basetypes.PSQL).(*sql.DB)
+
+func (u *PSqlFunctions) FindOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, keys string, condition map[string]interface{}, result interface{}, useOr bool, appendQuery string, addParenthesis bool) (*sql.Rows, error) {
+	conn := baseconnections.GetInstance().GetConnection(basetypes.PSQL).GetDB(basetypes.PSQL).(*sql.DB)
 	query := "SELECT * FROM " + string(collectionName)
+
+	if keys != "" {
+		query = "SELECT " + keys + " FROM " + string(collectionName)
+	}
 
 	whereClause := ""
 	values := make([]interface{}, 0)
 
+	placeholderCount := 1
+
 	for key, val := range condition {
 		if whereClause != "" {
-			whereClause += " AND "
+			if !useOr {
+				whereClause += " AND "
+			} else {
+				whereClause += " OR "
+			}
 		} else {
 			whereClause += " WHERE "
+			if addParenthesis {
+				whereClause = whereClause + "("
+			}
 		}
-		whereClause += key + "= ? "
+		whereClause += key + "= $" + strconv.FormatInt(int64(placeholderCount), 10) + " "
+		placeholderCount++
 		values = append(values, val)
 	}
+	if addParenthesis {
+		whereClause = whereClause + ")"
+	}
 
-	query += whereClause
+	query += whereClause + appendQuery
 	rows, err := conn.Query(query, values...)
 
 	return rows, err
 }
+
 func (u *PSqlFunctions) UpdateOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query string, data []interface{}, upsert bool) error {
-	conn := baseconnections.GetInstance().GetConnection(basetypes.MYSQL).GetDB(basetypes.PSQL).(*sql.DB)
+	conn := baseconnections.GetInstance().GetConnection(basetypes.PSQL).GetDB(basetypes.PSQL).(*sql.DB)
 	_, err := conn.Exec(query, data...)
 	return err
 }
+
 func (u *PSqlFunctions) DeleteOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query interface{}) error {
 	log.Println("Unimplemented DeleteOne MySql")
 	return nil

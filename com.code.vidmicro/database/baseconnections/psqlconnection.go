@@ -15,7 +15,7 @@ type PsqlConnection struct {
 }
 
 func (u *PsqlConnection) CreateConnection() (ConntectionInterface, error) {
-	dsn := configmanager.GetInstance().Database.Username + ":" + configmanager.GetInstance().Database.Password + "@tcp(" + configmanager.GetInstance().Database.Host + ":" + configmanager.GetInstance().Database.Port + ")/" + configmanager.GetInstance().Database.DBName
+	dsn := "postgres://" + configmanager.GetInstance().Database.Username + ":" + configmanager.GetInstance().Database.Password + "@" + configmanager.GetInstance().Database.Host + ":" + configmanager.GetInstance().Database.Port + "/" + configmanager.GetInstance().Database.DBName + "?sslmode=disable"
 
 	db, err := sql.Open("postgres", dsn)
 

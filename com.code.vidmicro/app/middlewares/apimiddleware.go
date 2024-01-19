@@ -15,7 +15,12 @@ type ApiMiddleware struct {
 
 func (u *ApiMiddleware) GetHandlerFunc() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		urlPath := "/" + strings.Split(c.Request.URL.Path, "/")[1] + "/" + strings.Split(c.Request.URL.Path, "/")[2]
+		splittedString := strings.Split(c.Request.URL.Path, "/")
+		if len(splittedString) < 3 {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.API_NOT_AVAILABLE, nil, nil))
+			return
+		}
+		urlPath := "/" + splittedString[1] + "/" + splittedString[2]
 
 		log.Println(urlPath, c.Request.Method, configmanager.GetInstance().Apis[urlPath])
 

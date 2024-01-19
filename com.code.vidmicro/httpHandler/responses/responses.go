@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
@@ -38,6 +37,15 @@ const (
 	LOGOUT_FAILED          = 1022
 	SESSION_NOT_FOUND      = 1023
 	METHOD_NOT_AVAILABLE   = 1024
+	ADDING_DB_FAILED       = 1025
+	ERROR_READING_USER     = 1026
+	PASSWORD_MISMATCHED    = 1027
+	ERROR_CREATING_JWT     = 1028
+	USER_BLOCKED           = 1029
+	TOKEN_EXPIRED          = 1030
+	REFRESH_TOKEN_REQUIRED = 1031
+	INVALID_REFRESH_TOKEN  = 1032
+	REFRESH_TOKEN_SUCCESS  = 1033
 )
 
 type Responses struct {
@@ -84,6 +92,14 @@ func (u *Responses) InitResponses() {
 	u.responses[UPDATE_SUCCESS] = "Updateion Success"
 	u.responses[SESSION_NOT_FOUND] = "SESSION_NOT_FOUND"
 	u.responses[METHOD_NOT_AVAILABLE] = "METHOD_NOT_AVAILABLE"
+	u.responses[ADDING_DB_FAILED] = "ADDING_DB_FAILED"
+	u.responses[ERROR_READING_USER] = "ERROR_READING_USER"
+	u.responses[ERROR_CREATING_JWT] = "ERROR_CREATING_JWT"
+	u.responses[USER_BLOCKED] = "USER_BLOCKED"
+	u.responses[TOKEN_EXPIRED] = "TOKEN_EXPIRED"
+	u.responses[REFRESH_TOKEN_REQUIRED] = "REFRESH_TOKEN_REQUIRED"
+	u.responses[INVALID_REFRESH_TOKEN] = "INVALID_REFRESH_TOKEN"
+	u.responses[REFRESH_TOKEN_SUCCESS] = "REFRESH_TOKEN_SUCCESS"
 }
 
 // GetResponse returns the message for the particular response code
@@ -96,7 +112,6 @@ func (u *Responses) getResponse(code int) map[string]interface{} {
 }
 
 func (u *Responses) WriteResponse(c *gin.Context, code int, err error, data interface{}) map[string]interface{} {
-	urlPath := "/" + strings.Split(c.Request.URL.Path, "/")[1] + "/" + strings.Split(c.Request.URL.Path, "/")[2]
 	returnMap := u.getResponse(code)
 	queryBytes, _ := json.Marshal(c.Request.URL.Query())
 
@@ -107,7 +122,7 @@ func (u *Responses) WriteResponse(c *gin.Context, code int, err error, data inte
 	auditTrial := models.AuditTrial{
 		QueryParams: string(queryBytes),
 		Body:        string(jsonData),
-		Url:         urlPath,
+		Url:         c.Request.URL.Path,
 		Code:        returnMap["code"].(int),
 		Message:     returnMap["message"].(string),
 		Email:       c.GetString("email"),
@@ -151,7 +166,6 @@ func (u *Responses) WriteJsonResponse(w http.ResponseWriter, r *http.Request, co
 		Message: returnMap["message"].(string),
 		Session: session.SessionId,
 		Email:   session.Email,
-		Phone:   session.Phone,
 		Method:  r.Method,
 		IP:      r.RemoteAddr,
 	}

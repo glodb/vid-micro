@@ -46,7 +46,7 @@ func (u *MySqlFunctions) EnsureIndex(dbName basetypes.DBName, collectionName bas
 	return err
 }
 
-func (u *MySqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.CollectionName, data interface{}) error {
+func (u *MySqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.CollectionName, data interface{}) (int64, error) {
 	conn := baseconnections.GetInstance().GetConnection(basetypes.MYSQL).GetDB(basetypes.MYSQL).(*sql.DB)
 	query := "INSERT INTO " + string(collectionName)
 
@@ -54,7 +54,7 @@ func (u *MySqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.C
 	dataType := dataValue.Type()
 
 	if dataType.Kind() != reflect.Struct {
-		return errors.New("Required a struct for data")
+		return -1, errors.New("Required a struct for data")
 	}
 
 	var columns []string
@@ -80,10 +80,11 @@ func (u *MySqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.C
 	query += " VALUES(" + strings.Join(placeholders, ", ") + ")"
 
 	_, err := conn.Exec(query, values...)
-	return err
+	return 0, err
 }
-func (u *MySqlFunctions) FindOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}, result interface{}) (*sql.Rows, error) {
+func (u *MySqlFunctions) FindOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, keys string, condition map[string]interface{}, result interface{}, useOr bool, appendQuery string, addParenthesis bool) (*sql.Rows, error) {
 	conn := baseconnections.GetInstance().GetConnection(basetypes.MYSQL).GetDB(basetypes.MYSQL).(*sql.DB)
+
 	query := "SELECT * FROM " + string(collectionName)
 
 	whereClause := ""
@@ -91,7 +92,11 @@ func (u *MySqlFunctions) FindOne(dbName basetypes.DBName, collectionName basetyp
 
 	for key, val := range condition {
 		if whereClause != "" {
-			whereClause += " AND "
+			if !useOr {
+				whereClause += " AND "
+			} else {
+				whereClause += " OR "
+			}
 		} else {
 			whereClause += " WHERE "
 		}
@@ -99,7 +104,11 @@ func (u *MySqlFunctions) FindOne(dbName basetypes.DBName, collectionName basetyp
 		values = append(values, val)
 	}
 
-	query += whereClause
+	if addParenthesis {
+		whereClause = "(" + whereClause + ")"
+	}
+
+	query += whereClause + appendQuery
 	rows, err := conn.Query(query, values...)
 
 	return rows, err

@@ -30,6 +30,7 @@ type config struct {
 	Redis              configModels.RedisConnection `json:"redis"`
 	ServiceLogName     string                       `json:"serviceLogName"`
 	Apis               map[string][]string          `json:"apis"`
+	TokenExpiry        int64                        `json:"tokenExpiry"`
 }
 
 var (

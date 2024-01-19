@@ -14,22 +14,23 @@
         "vidmicro.content":"HandleAuthData"
     },
     "apis": {
-        "/api/createSession":["POST"],
-        "/api/register":["GET"]
+        "/api/createSession":["GET"],
+        "/api/signup":["POST"],
+        "/api/login":["POST"],
+        "/api/refreshToken":["POST"],
+        "/api/getUser":["GET"]
     },
     "sessionSecret": "*mongonormalcontrollers.SessionController",
+    "tokenExpiry": 5000,
     "acl": {
         "user": [
-            "/api/getUser",
-            "/api/logout"
+            "/api/getUser"
         ],
         "admin": [
-            "/api/getUser",
-            "/api/logout"
+            "/api/getUser"
         ],
         "manager": [
-            "/api/getUser",
-            "/api/logout"
+            "/api/getUser"
         ]
     }
 }
