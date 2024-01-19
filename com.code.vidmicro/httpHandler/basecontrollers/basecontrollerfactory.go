@@ -59,7 +59,7 @@ func (c *controllersObject) registerControllers(key string, registerApis bool) {
 	case Session:
 		c.controllers[key] = &controllers.SessionController{BaseControllerFactory: c, ValidatorInterface: &validators.SessionValidator{}}
 	}
-	funcs, _ := basefunctions.GetInstance().GetFunctions(basetypes.MYSQL, c.controllers[key].GetDBName())
+	funcs, _ := basefunctions.GetInstance().GetFunctions(basetypes.PSQL, c.controllers[key].GetDBName())
 	c.controllers[key].SetBaseFunctions(*funcs)
 	c.controllers[key].DoIndexing()
 	if registerApis {

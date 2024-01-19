@@ -34,6 +34,10 @@ func (s *ServiceUtils) GetNat() *nats.Conn {
 	return s.nat
 }
 
+func (s *ServiceUtils) PublishEvent(data interface{}, serviceName string, topic string) {
+	s.eventPublisher.publishEvent(data, serviceName, topic)
+}
+
 func (s *ServiceUtils) serviceInitialization() {
 
 }

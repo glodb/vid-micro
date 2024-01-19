@@ -11,6 +11,7 @@ import (
 
 	"com.code.vidmicro/com.code.vidmicro/httpHandler"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers"
+	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/serviceutils"
 )
 
@@ -22,6 +23,10 @@ func (u *AuthService) Run() error {
 
 	u.AssignSubscriber()
 	serviceutils.GetInstance().RunService()
+
+	data := map[string]string{"abc": "ced"}
+
+	serviceutils.GetInstance().PublishEvent(data, configmanager.GetInstance().ClassName, "vidmicro.content")
 	u.RunServer()
 
 	return nil
@@ -30,7 +35,7 @@ func (u *AuthService) Run() error {
 func (u *AuthService) RunServer() {
 
 	srv := &http.Server{
-		Addr:    ":8080",
+		Addr:    configmanager.GetInstance().Address,
 		Handler: httpHandler.GetInstance().GetEngine(),
 	}
 	basecontrollers.GetInstance().RegisterControllers()
@@ -65,7 +70,9 @@ func (u *AuthService) RunServer() {
 }
 
 func (u *AuthService) AssignSubscriber() error {
-	return nil
+	u.sb = AuthSubscriptions{}
+	err := u.sb.RegisterSubscriptions()
+	return err
 }
 
 func (u *AuthService) Stop() {

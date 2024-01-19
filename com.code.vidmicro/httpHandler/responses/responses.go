@@ -37,6 +37,7 @@ const (
 	LOGOUT_SUCCESS         = 1021
 	LOGOUT_FAILED          = 1022
 	SESSION_NOT_FOUND      = 1023
+	METHOD_NOT_AVAILABLE   = 1024
 )
 
 type Responses struct {
@@ -82,6 +83,7 @@ func (u *Responses) InitResponses() {
 	u.responses[UPDATE_FAILED] = "Updation Failed"
 	u.responses[UPDATE_SUCCESS] = "Updateion Success"
 	u.responses[SESSION_NOT_FOUND] = "SESSION_NOT_FOUND"
+	u.responses[METHOD_NOT_AVAILABLE] = "METHOD_NOT_AVAILABLE"
 }
 
 // GetResponse returns the message for the particular response code

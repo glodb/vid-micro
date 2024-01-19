@@ -1,10 +1,9 @@
 {
     "database": {
         "host": "127.0.0.1",
-        "port": "3306",
-        "username": "root",
-        "password": "ANSKk08aPEDbFjDO",
-        "dbname": "sso"
+        "port": "5432",
+        "username": "postgres",
+        "password": "mysecretpassword"
     },
     "sessionKey": "spiderman",
     "natsServer":"nats://127.0.0.1:4222",

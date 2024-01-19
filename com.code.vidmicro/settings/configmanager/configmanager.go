@@ -12,7 +12,7 @@ import (
 )
 
 type config struct {
-	Server             string                      `json:"address"`
+	Address            string                      `json:"address"`
 	Database           configModels.DatabaseConfig `json:"database"`
 	ClassName          string
 	Controllers        []string                     `json:"controllers"`
@@ -29,6 +29,7 @@ type config struct {
 	SessionSecret      string                       `json:"sessionSecret"`
 	Redis              configModels.RedisConnection `json:"redis"`
 	ServiceLogName     string                       `json:"serviceLogName"`
+	Apis               map[string][]string          `json:"apis"`
 }
 
 var (

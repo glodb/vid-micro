@@ -111,7 +111,7 @@ func (ts *EventPublisher) sendEvents() {
 	}
 }
 
-func (ts *EventPublisher) PublishEvent(data interface{}, serviceName string, topic string) error {
+func (ts *EventPublisher) publishEvent(data interface{}, serviceName string, topic string) error {
 	// Marshal to JSON string
 	if topics.GetInstance().ValidatePublishableTopics(topic) {
 

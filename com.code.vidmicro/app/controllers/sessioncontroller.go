@@ -40,7 +40,6 @@ func (u *SessionController) SetBaseFunctions(inter basefunctions.BaseFucntionsIn
 
 func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		sessionId, err := utils.GenerateUUID()
 		modelSession := models.Session{
 			SessionId: sessionId,
@@ -66,5 +65,5 @@ func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 }
 
 func (u SessionController) RegisterApis() {
-	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/createSession", u.handleCreateSession())
+	baserouter.GetInstance().GetLoginRouter().POST("/api/createSession", u.handleCreateSession())
 }
