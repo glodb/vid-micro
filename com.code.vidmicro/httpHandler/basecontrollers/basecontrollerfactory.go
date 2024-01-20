@@ -58,6 +58,15 @@ func (c *controllersObject) registerControllers(key string, registerApis bool) {
 		c.controllers[key] = &controllers.UserController{BaseControllerFactory: c, ValidatorInterface: &validators.UserValidator{}}
 	case Session:
 		c.controllers[key] = &controllers.SessionController{BaseControllerFactory: c, ValidatorInterface: &validators.SessionValidator{}}
+	case Roles:
+		c.controllers[key] = &controllers.RolesController{BaseControllerFactory: c, ValidatorInterface: &validators.RolesValidator{}}
+	case Genres:
+		c.controllers[key] = &controllers.GenresController{BaseControllerFactory: c, ValidatorInterface: &validators.GenresValidator{}}
+	case Status:
+		c.controllers[key] = &controllers.StatusController{BaseControllerFactory: c, ValidatorInterface: &validators.StatusValidator{}}
+	case Language:
+		c.controllers[key] = &controllers.LanguageController{BaseControllerFactory: c, ValidatorInterface: &validators.LanguageValidator{}}
+
 	}
 	funcs, _ := basefunctions.GetInstance().GetFunctions(basetypes.PSQL, c.controllers[key].GetDBName())
 	c.controllers[key].SetBaseFunctions(*funcs)

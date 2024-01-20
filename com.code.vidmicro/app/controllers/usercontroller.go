@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"crypto/rand"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/responses"
 	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
+	"com.code.vidmicro/com.code.vidmicro/settings/s3uploader"
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
@@ -74,14 +76,19 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 			return
 		}
 
-		file, _, err := c.Request.FormFile("image")
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
-			return
-		}
-		defer file.Close()
+		file, err := c.FormFile("image")
 
-		err = u.Validate(c.GetString("path"), modelUser)
+		if err == nil && file != nil {
+			url, err := s3uploader.GetInstance().UploadToSCW(file)
+			if err == nil {
+				modelUser.AvatarUrl = url
+			} else {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
+				return
+			}
+		}
+
+		err = u.Validate(c.GetString("apiPath"), modelUser)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
 			return
@@ -101,7 +108,7 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_HASH_FAILED, err, nil))
 			return
 		}
-		_, err = u.Add(u.GetDBName(), u.GetCollectionName(), modelUser)
+		_, err = u.Add(u.GetDBName(), u.GetCollectionName(), modelUser, true)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_HASH_FAILED, err, nil))
@@ -119,7 +126,7 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("path"), modelUser)
+		err := u.Validate(c.GetString("apiPath"), modelUser)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
 			return
@@ -196,8 +203,7 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 				session.CreatedAt = user.CreatedAt
 				session.UpdatedAt = user.UpdatedAt
 				session.UserId = int64(user.Id)
-
-				//TODO: get the role name from db
+				session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
 
 				cache.GetInstance().SAdd([]interface{}{strconv.FormatInt(int64(user.Id), 10) + "_all_sessions", sessionId})
 
@@ -267,9 +273,129 @@ func (u *UserController) handleGetUser() gin.HandlerFunc {
 	}
 }
 
+func (u *UserController) handleBlackListUser() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		modelUser := models.User{}
+		if err := c.ShouldBind(&modelUser); err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		err := u.Validate(c.GetString("apiPath"), modelUser)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		var currentSession models.Session
+		if val, ok := c.Get("session"); ok {
+			currentSession = val.(models.Session)
+		}
+
+		if currentSession.Username == modelUser.Username {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_BLACK_LISTING, errors.New("can't black list your own user"), nil))
+			return
+		}
+
+		sessions := cache.GetInstance().SMembers(strconv.FormatInt(int64(modelUser.Id), 10) + "_all_sessions")
+
+		for _, sessionId := range sessions {
+			data, err := cache.GetInstance().Get(sessionId)
+			if err == nil || len(data) != 0 {
+				var session models.Session
+				session.DecodeRedisData(data)
+				session.BlackListed = true
+				cache.GetInstance().Set(sessionId, session.EncodeRedisData())
+			}
+		}
+
+		data := []interface{}{true, modelUser.Id}
+
+		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET black_listed = $1 WHERE id = $2 ", data, false)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_BLACK_LISTING, err, nil))
+			return
+		}
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.BLACK_LIST_SUCCESS, err, nil))
+	}
+}
+
+func (u *UserController) handleEditUser() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		setPart := " SET "
+		data := make([]interface{}, 0)
+		modelUser := models.User{}
+		if err := c.ShouldBind(&modelUser); err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		err := u.Validate(c.GetString("apiPath"), modelUser)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		var currentSession models.Session
+		if val, ok := c.Get("session"); ok {
+			currentSession = val.(models.Session)
+		}
+
+		file, err := c.FormFile("image")
+
+		if err == nil && file != nil {
+			url, err := s3uploader.GetInstance().UploadToSCW(file)
+			if err == nil {
+
+				if currentSession.AvatarUrl != url {
+					modelUser.AvatarUrl = url
+					currentSession.AvatarUrl = url
+					setPart += "avatar_url = $1"
+					data = append(data, url)
+				}
+			} else {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
+				return
+			}
+		}
+
+		if modelUser.Name != "" {
+			if currentSession.Name != modelUser.Name {
+				lengthString := strconv.FormatInt(int64(len(data)+1), 10)
+				if len(data) > 0 {
+					setPart += ","
+				}
+				setPart += "name = $" + lengthString
+				currentSession.Name = modelUser.Name
+				data = append(data, modelUser.Name)
+			}
+		}
+
+		cache.GetInstance().Set(currentSession.SessionId, currentSession.EncodeRedisData())
+
+		if len(data) > 0 {
+			lengthString := strconv.FormatInt(int64(len(data)+1), 10)
+			setPart += " WHERE id =$" + lengthString
+			data = append(data, currentSession.UserId)
+
+			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+setPart, data, false)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_UPDATING_USER, err, nil))
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATING_USER_SUCCESS, err, nil))
+			return
+		}
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.NOTHIN_TO_UPDATE, err, nil))
+	}
+}
+
 func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetOpenRouter().POST("/api/signup", u.handleRegisterUser())
 	baserouter.GetInstance().GetOpenRouter().POST("/api/login", u.handleLogin())
 	baserouter.GetInstance().GetOpenRouter().POST("/api/refreshToken", u.handleRefreshToken())
 	baserouter.GetInstance().GetLoginRouter().GET("/api/getUser", u.handleGetUser())
+	baserouter.GetInstance().GetLoginRouter().POST("/api/blackListUser", u.handleBlackListUser())
+	baserouter.GetInstance().GetLoginRouter().POST("/api/editUser", u.handleEditUser())
 }

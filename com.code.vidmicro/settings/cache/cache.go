@@ -283,7 +283,7 @@ func (cache *RedisCache) SAdd(value []interface{}) error {
 	return err
 }
 
-func (cache *RedisCache) ReadSet(key string) []string {
+func (cache *RedisCache) SMembers(key string) []string {
 	if err := cache.semaphore.Acquire(context.TODO(), 1); err != nil {
 
 		return nil

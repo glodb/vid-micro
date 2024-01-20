@@ -4,33 +4,38 @@
     },
     "microServiceName": "authService",
     "address": "localhost:8080",
-    "controllers": ["User", "Session"],
+    "controllers": ["User", "Session", "Roles"],
     "allowDB": true,
     "serviceLogName": "auth",
     "publishingTopics": [
         "vidmicro.content"
     ],
     "subscribedTopics": {
-        "vidmicro.content":"HandleAuthData"
     },
     "apis": {
         "/api/createSession":["GET"],
         "/api/signup":["POST"],
         "/api/login":["POST"],
         "/api/refreshToken":["POST"],
-        "/api/getUser":["GET"]
+        "/api/getUser":["GET"],
+        "/api/blackListUser":["POST"],
+        "/api/editUser": ["POST"]
     },
     "sessionSecret": "*mongonormalcontrollers.SessionController",
     "tokenExpiry": 5000,
     "acl": {
-        "user": [
-            "/api/getUser"
-        ],
-        "admin": [
-            "/api/getUser"
-        ],
-        "manager": [
-            "/api/getUser"
-        ]
+        "user": {
+            "/api/getUser": ["GET"],
+            "/api/editUser":["POST"]
+        },
+        "admin": {
+            "/api/getUser": ["GET"],
+            "/api/editUser":["POST"],
+            "/api/blackListUser":["POST"]
+        },
+        "manager": {
+            "/api/getUser": ["GET"],
+            "/api/editUser":["POST"]
+        }
     }
 }

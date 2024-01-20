@@ -1,0 +1,29 @@
+{
+    "database": {
+        "dbname": "content"
+    },
+    "microServiceName": "contentService",
+    "address": "localhost:8080",
+    "controllers": [],
+    "allowDB": true,
+    "serviceLogName": "auth",
+    "publishingTopics": [
+    ],
+    "subscribedTopics": {
+        "vidmicro.language.created":"HandleLanguageCreated",
+        "vidmicro.language.updated":"HandleLanguageUpdated",
+        "vidmicro.language.deleted":"HandleLanguageDeleted"
+    },
+    "apis": {
+    },
+    "sessionSecret": "*mongonormalcontrollers.SessionController",
+    "tokenExpiry": 5000,
+    "acl": {
+        "user": {
+        },
+        "admin": {
+        },
+        "manager": {
+        }
+    }
+}

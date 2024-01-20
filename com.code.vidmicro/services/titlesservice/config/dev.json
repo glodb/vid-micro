@@ -4,25 +4,37 @@
     },
     "microServiceName": "titlesService",
     "address": "localhost:8081",
-    "controllers": [],
+    "controllers": ["Genres", "Status", "Language"],
     "allowDB": true,
     "serviceLogName": "titles",
     "publishingTopics": [
-        "vidmicro.title"
+        "vidmicro.language.created",
+        "vidmicro.language.updated",
+        "vidmicro.language.deleted"
     ],
     "subscribedTopics": {
     },
     "apis": {
-        "/api/createSession":["POST"],
-        "/api/register":["GET"]
+        "/api/genres":["GET", "PUT", "POST", "DELETE"],
+        "/api/status":["GET", "PUT", "POST", "DELETE"],
+        "/api/languages":["GET", "PUT", "POST", "DELETE"]
     },
-    "sessionSecret": "*mongonormalcontrollers.SessionController",
+    "sessionSecret": "spiderman",
     "acl": {
-        "user": [
-        ],
-        "admin": [
-        ],
-        "manager": [
-        ]
+        "user": {
+            "/api/genres":["GET"],
+            "/api/status":["GET"],
+            "/api/languages":["GET"]
+        },
+        "admin": {
+            "/api/genres":["GET","PUT","POST","DELETE"],
+            "/api/status":["GET", "PUT", "POST", "DELETE"],
+            "/api/languages":["GET", "PUT", "POST", "DELETE"]
+        },
+        "manager": {
+            "/api/genres":["GET"],
+            "/api/status":["GET"],
+            "/api/languages":["GET"]
+        }
     }
 }

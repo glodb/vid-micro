@@ -3,7 +3,7 @@ package models
 import "time"
 
 type User struct {
-	Id          int       `db:"id SERIAL PRIMARY KEY"`
+	Id          int       `db:"id SERIAL PRIMARY KEY" form:"id"`
 	Username    string    `db:"username VARCHAR(255) NOT NULL UNIQUE" json:"username" form:"username"`
 	Name        string    `db:"name VARCHAR(255)" json:"name" form:"name"`
 	Email       string    `db:"email VARCHAR(255) NOT NULL UNIQUE" json:"email" form:"email"`

@@ -25,7 +25,8 @@ func (u *ApiMiddleware) GetHandlerFunc() gin.HandlerFunc {
 		log.Println(urlPath, c.Request.Method, configmanager.GetInstance().Apis[urlPath])
 
 		if methods, ok := configmanager.GetInstance().Apis[urlPath]; ok {
-			if u.containsMethod(methods, c.Request.Method) {
+			if methods.Contains(c.Request.Method) {
+				c.Set("apiPath", urlPath)
 				c.Next()
 			} else {
 				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.METHOD_NOT_AVAILABLE, nil, nil))
@@ -36,18 +37,4 @@ func (u *ApiMiddleware) GetHandlerFunc() gin.HandlerFunc {
 			return
 		}
 	}
-}
-
-func (u *ApiMiddleware) containsMethod(methods []string, target string) bool {
-
-	if len(methods) > 20 { //An api can't have more than 20 methods
-		return false
-	}
-
-	for _, method := range methods {
-		if method == target {
-			return true
-		}
-	}
-	return false
 }

@@ -1,4 +1,4 @@
-package authservice
+package contentservice
 
 import (
 	"context"
@@ -15,20 +15,21 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/serviceutils"
 )
 
-type AuthService struct {
+type ContentService struct {
 	sb serviceutils.SubscriptionInterface
 }
 
-func (u *AuthService) Run() error {
+func (u *ContentService) Run() error {
 
 	u.AssignSubscriber()
 	serviceutils.GetInstance().RunService()
+
 	u.RunServer()
 
 	return nil
 }
 
-func (u *AuthService) RunServer() {
+func (u *ContentService) RunServer() {
 
 	srv := &http.Server{
 		Addr:    configmanager.GetInstance().Address,
@@ -65,10 +66,12 @@ func (u *AuthService) RunServer() {
 	log.Println("Server exiting")
 }
 
-func (u *AuthService) AssignSubscriber() error {
-	return nil
+func (u *ContentService) AssignSubscriber() error {
+	u.sb = ContentServiceSubscriptions{}
+	err := u.sb.RegisterSubscriptions()
+	return err
 }
 
-func (u *AuthService) Stop() {
+func (u *ContentService) Stop() {
 	serviceutils.GetInstance().Shutdown()
 }

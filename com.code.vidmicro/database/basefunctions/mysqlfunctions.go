@@ -46,7 +46,7 @@ func (u *MySqlFunctions) EnsureIndex(dbName basetypes.DBName, collectionName bas
 	return err
 }
 
-func (u *MySqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.CollectionName, data interface{}) (int64, error) {
+func (u *MySqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.CollectionName, data interface{}, scan bool) (int64, error) {
 	conn := baseconnections.GetInstance().GetConnection(basetypes.MYSQL).GetDB(basetypes.MYSQL).(*sql.DB)
 	query := "INSERT INTO " + string(collectionName)
 
@@ -118,7 +118,7 @@ func (u *MySqlFunctions) UpdateOne(dbName basetypes.DBName, collectionName baset
 	_, err := conn.Exec(query, data...)
 	return err
 }
-func (u *MySqlFunctions) DeleteOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query interface{}) error {
+func (u *MySqlFunctions) DeleteOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}, useOr bool, addParenthesis bool) error {
 	log.Println("Unimplemented DeleteOne MySql")
 	return nil
 }
