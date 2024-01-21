@@ -34,6 +34,7 @@ type config struct {
 	TokenExpiry        int64                          `json:"tokenExpiry"`
 	MapAcl             map[string]map[string][]string `json:"acl"`
 	S3Settings         configModels.S3Connection      `json:"s3Settings"`
+	PageSize           int64                          `json:"pageSize"`
 	Acl                map[string]map[string]*utils.Set
 	Apis               map[string]*utils.Set
 }

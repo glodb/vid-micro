@@ -12,7 +12,11 @@
     "subscribedTopics": {
         "vidmicro.language.created":"HandleLanguageCreated",
         "vidmicro.language.updated":"HandleLanguageUpdated",
-        "vidmicro.language.deleted":"HandleLanguageDeleted"
+        "vidmicro.language.deleted":"HandleLanguageDeleted",
+        "vidmicro.title.created":"HandleTitleCreated",
+        "vidmicro.title.updated":"HandleTitleUpdated",
+        "vidmicro.title.deleted":"HandleTitleDeleted",
+        "vidmicro.title.language.deleted": "HandleTitleLanguageDeleted"
     },
     "apis": {
     },

@@ -21,7 +21,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
-	"github.com/oklog/ulid"
+	"github.com/oklog/ulid/v2"
 )
 
 type UserController struct {
@@ -132,7 +132,7 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 			return
 		}
 
-		rows, err := u.FindOne(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, role, salt, avatar_url, createdAt, updatedAt", map[string]interface{}{"username": modelUser.Username, "email": modelUser.Email}, &modelUser, true, " AND is_verified=TRUE AND black_listed=FALSE", true)
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, role, salt, avatar_url, createdAt, updatedAt", map[string]interface{}{"username": modelUser.Username, "email": modelUser.Email}, &modelUser, true, " AND is_verified=TRUE AND black_listed=FALSE", true)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))

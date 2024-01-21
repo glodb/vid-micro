@@ -75,7 +75,13 @@ func (u *GenresController) handleGetGenre() gin.HandlerFunc {
 			return
 		}
 
-		rows, err := u.FindOne(u.GetDBName(), u.GetCollectionName(), "", map[string]interface{}{"id": modelGenre.Id}, &modelGenre, false, " Limit 1", false)
+		query := map[string]interface{}{"id": modelGenre.Id}
+
+		if modelGenre.Id <= 0 {
+			query = map[string]interface{}{}
+		}
+
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "", query, &modelGenre, false, "", false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
@@ -83,18 +89,22 @@ func (u *GenresController) handleGetGenre() gin.HandlerFunc {
 		}
 		defer rows.Close()
 
+		genres := make([]models.Genres, 0)
+
 		// Iterate over the rows.
 		for rows.Next() {
 			// Create a User struct to scan values into.
+			tempGenre := models.Genres{}
 
 			// Scan the row's values into the User struct.
-			err := rows.Scan(&modelGenre.Id, &modelGenre.Name)
+			err := rows.Scan(&tempGenre.Id, &tempGenre.Name)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
 				return
 			}
+			genres = append(genres, tempGenre)
 		}
-		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, modelGenre))
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, genres))
 	}
 }
 

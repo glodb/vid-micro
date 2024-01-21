@@ -9,7 +9,14 @@
     "natsServer":"nats://127.0.0.1:4222",
     "publisherBatchSize": 100,
     "isProduction": false,
-    "registeredTopics":["vidmicro.language.created", "vidmicro.language.updated", "vidmicro.language.deleted"],
+    "registeredTopics":["vidmicro.language.created", 
+                        "vidmicro.language.updated", 
+                        "vidmicro.language.deleted",
+                        "vidmicro.title.created",
+                        "vidmicro.title.updated",
+                        "vidmicro.title.deleted",
+                        "vidmicro.title.language.deleted"
+                    ],
     "printWarning": true,
     "printInfo": true,
     "sessionSecret": "sessionSecret",
@@ -26,5 +33,6 @@
         "secretKey": "9dbc99c0-b24e-4f85-ac2a-fea1e76717da",
         "bucket": "vid-micro-test",
         "folder": "static"
-    }
+    },
+    "pageSize": 10
 }

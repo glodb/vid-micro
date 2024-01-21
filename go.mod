@@ -11,7 +11,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/minio/minio-go/v7 v7.0.66
 	github.com/nats-io/nats.go v1.32.0
-	github.com/oklog/ulid v1.3.1
+	github.com/oklog/ulid/v2 v2.1.0
 	github.com/rs/xid v1.5.0
 	golang.org/x/sync v0.6.0
 )

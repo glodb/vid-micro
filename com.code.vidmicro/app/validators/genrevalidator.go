@@ -19,8 +19,6 @@ func (u *GenresValidator) Validate(apiName string, data interface{}) error {
 	case "/api/genres/delete":
 		fallthrough
 	case "/api/genres/post":
-		fallthrough
-	case "/api/genres/get":
 		if gnresData.Id <= 0 {
 			return errors.New("genre id is required")
 		}

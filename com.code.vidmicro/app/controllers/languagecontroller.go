@@ -16,7 +16,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/serviceutils"
 	"github.com/gin-gonic/gin"
-	"github.com/oklog/ulid"
+	"github.com/oklog/ulid/v2"
 )
 
 type LanguageController struct {
@@ -83,7 +83,13 @@ func (u *LanguageController) handleGetLanguage() gin.HandlerFunc {
 			return
 		}
 
-		rows, err := u.FindOne(u.GetDBName(), u.GetCollectionName(), "", map[string]interface{}{"id": modelLanguage.Id}, &modelLanguage, false, " Limit 1", false)
+		query := map[string]interface{}{"id": modelLanguage.Id}
+
+		if modelLanguage.Id == "" {
+			query = map[string]interface{}{}
+		}
+
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "", query, &modelLanguage, false, "", false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
@@ -91,18 +97,22 @@ func (u *LanguageController) handleGetLanguage() gin.HandlerFunc {
 		}
 		defer rows.Close()
 
+		languages := make([]models.Language, 0)
 		// Iterate over the rows.
 		for rows.Next() {
+			tempLanguage := models.Language{}
 			// Create a User struct to scan values into.
 
 			// Scan the row's values into the User struct.
-			err := rows.Scan(&modelLanguage.Id, &modelLanguage.Name, &modelLanguage.Code)
+			err := rows.Scan(&tempLanguage.Id, &tempLanguage.Name, &tempLanguage.Code)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
 				return
 			}
+
+			languages = append(languages, tempLanguage)
 		}
-		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, modelLanguage))
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, languages))
 	}
 }
 

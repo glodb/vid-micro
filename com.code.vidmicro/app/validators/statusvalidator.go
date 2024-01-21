@@ -12,15 +12,13 @@ type StatusValidator struct {
 func (u *StatusValidator) Validate(apiName string, data interface{}) error {
 	statusData := data.(models.Status)
 	switch apiName {
-	case "/api/genres/put":
+	case "/api/status/put":
 		if statusData.Name == "" {
 			return errors.New("genre name is required")
 		}
-	case "/api/genres/delete":
+	case "/api/status/delete":
 		fallthrough
-	case "/api/genres/post":
-		fallthrough
-	case "/api/genres/get":
+	case "/api/status/post":
 		if statusData.Id <= 0 {
 			return errors.New("genre id is required")
 		}

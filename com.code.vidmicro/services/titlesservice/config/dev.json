@@ -4,7 +4,7 @@
     },
     "microServiceName": "titlesService",
     "address": "localhost:8081",
-    "controllers": ["Genres", "Status", "Language"],
+    "controllers": ["Genres", "Status", "Language", "TitleType", "Titles"],
     "allowDB": true,
     "serviceLogName": "titles",
     "publishingTopics": [
@@ -17,24 +17,32 @@
     "apis": {
         "/api/genres":["GET", "PUT", "POST", "DELETE"],
         "/api/status":["GET", "PUT", "POST", "DELETE"],
-        "/api/languages":["GET", "PUT", "POST", "DELETE"]
+        "/api/languages":["GET", "PUT", "POST", "DELETE"],
+        "/api/title_type":["GET", "PUT", "POST", "DELETE"],
+        "/api/titles": ["GET", "PUT", "POST", "DELETE"]
     },
     "sessionSecret": "spiderman",
     "acl": {
         "user": {
             "/api/genres":["GET"],
             "/api/status":["GET"],
-            "/api/languages":["GET"]
+            "/api/languages":["GET"],
+            "/api/title_type":["GET"],
+            "/api/titles": ["GET"]
         },
         "admin": {
             "/api/genres":["GET","PUT","POST","DELETE"],
             "/api/status":["GET", "PUT", "POST", "DELETE"],
-            "/api/languages":["GET", "PUT", "POST", "DELETE"]
+            "/api/languages":["GET", "PUT", "POST", "DELETE"],
+            "/api/title_type":["GET", "PUT", "POST", "DELETE"],
+            "/api/titles": ["GET", "PUT", "POST", "DELETE"]
         },
         "manager": {
             "/api/genres":["GET"],
             "/api/status":["GET"],
-            "/api/languages":["GET"]
+            "/api/title_type":["GET"],
+            "/api/languages":["GET"],
+            "/api/titles": ["GET"]
         }
     }
 }

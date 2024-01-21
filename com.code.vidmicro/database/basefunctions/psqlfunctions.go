@@ -9,6 +9,7 @@ import (
 
 	"com.code.vidmicro/com.code.vidmicro/database/baseconnections"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
+	"github.com/lib/pq"
 )
 
 type PSqlFunctions struct {
@@ -32,7 +33,12 @@ func (u *PSqlFunctions) EnsureIndex(dbName basetypes.DBName, collectionName base
 
 	for i := 0; i < dataType.NumField(); i++ {
 		field := dataType.Field(i)
-		tags := strings.Split(field.Tag.Get("db"), ",")
+		tagValue := field.Tag.Get("db")
+
+		if tagValue == "" {
+			continue
+		}
+		tags := strings.Split(tagValue, ",")
 
 		if columns != "" {
 			columns += ","
@@ -65,17 +71,24 @@ func (u *PSqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.Co
 
 	for i := 0; i < dataType.NumField(); i++ {
 		field := dataType.Field(i)
-		if strings.Contains(strings.ToUpper(field.Tag.Get("db")), "SERIAL") {
+		tagVal := field.Tag.Get("db")
+		if strings.Contains(strings.ToUpper(tagVal), "SERIAL") {
 			continue
 		}
-		tag := strings.Split(field.Tag.Get("db"), " ")[0]
+		tag := strings.Split(tagVal, " ")[0]
 
 		if tag == "" {
 			continue
 		}
 
 		value := dataValue.Field(i).Interface()
-		values = append(values, value)
+
+		if strings.Contains(tagVal, "[]") {
+			values = append(values, pq.Array(value))
+
+		} else {
+			values = append(values, value)
+		}
 
 		columns = append(columns, tag)
 		placeholders = append(placeholders, "$"+strconv.FormatInt(int64(placeholderCount), 10))
@@ -90,6 +103,9 @@ func (u *PSqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.Co
 		query,
 		values...,
 	)
+	if row.Err() != nil {
+		return -1, row.Err()
+	}
 	var err error
 	if scan {
 		err = row.Scan(&insertedID)
@@ -100,7 +116,72 @@ func (u *PSqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.Co
 	return insertedID, err
 }
 
-func (u *PSqlFunctions) FindOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, keys string, condition map[string]interface{}, result interface{}, useOr bool, appendQuery string, addParenthesis bool) (*sql.Rows, error) {
+func (u *PSqlFunctions) AddMany(dbName basetypes.DBName, collectionName basetypes.CollectionName, dataArray []interface{}, scan bool) ([]int64, error) {
+	conn := baseconnections.GetInstance().GetConnection(basetypes.PSQL).GetDB(basetypes.PSQL).(*sql.DB)
+	query := "INSERT INTO " + string(collectionName)
+
+	var columns []string
+	values := make([]interface{}, 0)
+	placeholderCount := 1
+
+	for i, data := range dataArray {
+		dataValue := reflect.ValueOf(data)
+		dataType := dataValue.Type()
+
+		if dataType.Kind() != reflect.Struct {
+			return nil, errors.New("required a struct for data")
+		}
+
+		var placeholders []string
+
+		for i := 0; i < dataType.NumField(); i++ {
+			field := dataType.Field(i)
+			if strings.Contains(strings.ToUpper(field.Tag.Get("db")), "SERIAL") {
+				continue
+			}
+			tag := strings.Split(field.Tag.Get("db"), " ")[0]
+
+			if tag == "" {
+				continue
+			}
+
+			value := dataValue.Field(i).Interface()
+			values = append(values, value)
+
+			columns = append(columns, tag)
+			placeholders = append(placeholders, "$"+strconv.FormatInt(int64(placeholderCount), 10))
+			placeholderCount++
+		}
+		if i == 0 {
+			query += "(" + strings.Join(columns, ", ") + ")"
+			query += " VALUES(" + strings.Join(placeholders, ", ") + ")"
+		} else {
+			query += ", (" + strings.Join(placeholders, ", ") + ")"
+		}
+	}
+
+	query += " RETURNING id"
+
+	var insertedID []int64
+	row := conn.QueryRow(
+		query,
+		values...,
+	)
+	if row.Err() != nil {
+		return nil, row.Err()
+	}
+	var err error
+	if scan {
+		err = row.Scan(&insertedID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return insertedID, nil
+	// return insertedID, err
+}
+
+func (u *PSqlFunctions) Find(dbName basetypes.DBName, collectionName basetypes.CollectionName, keys string, condition map[string]interface{}, result interface{}, useOr bool, appendQuery string, addParenthesis bool) (*sql.Rows, error) {
 	conn := baseconnections.GetInstance().GetConnection(basetypes.PSQL).GetDB(basetypes.PSQL).(*sql.DB)
 	query := "SELECT * FROM " + string(collectionName)
 
