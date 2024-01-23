@@ -1,10 +1,9 @@
 package controllers
 
 import (
-	"crypto/rand"
-	"io"
+	"fmt"
 	"net/http"
-	"time"
+	"strconv"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
@@ -13,17 +12,16 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/baserouter"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basevalidators"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/responses"
+	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/serviceutils"
 	"github.com/gin-gonic/gin"
-	"github.com/oklog/ulid/v2"
 )
 
 type LanguageController struct {
 	baseinterfaces.BaseControllerFactory
 	basefunctions.BaseFucntionsInterface
 	basevalidators.ValidatorInterface
-	entropy io.Reader
 }
 
 func (u LanguageController) GetDBName() basetypes.DBName {
@@ -35,8 +33,27 @@ func (u LanguageController) GetCollectionName() basetypes.CollectionName {
 }
 
 func (u LanguageController) DoIndexing() error {
-	u.entropy = ulid.Monotonic(rand.Reader, 0)
 	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.Language{})
+	keys := cache.GetInstance().GetKeys("*" + configmanager.GetInstance().LanguagePostfix)
+	cache.GetInstance().DelMany(keys)
+
+	rows, _ := u.Find(u.GetDBName(), u.GetCollectionName(), "", map[string]interface{}{}, &models.Language{}, false, "", false)
+
+	defer rows.Close()
+	// Iterate over the rows.
+	for rows.Next() {
+		// Create a User struct to scan values into.
+
+		tempLanguage := models.Language{}
+
+		// Scan the row's values into the User struct.
+		err := rows.Scan(&tempLanguage.Id, &tempLanguage.Name, &tempLanguage.Code)
+		if err != nil {
+			break
+		}
+
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", tempLanguage.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix), tempLanguage.EncodeRedisData())
+	}
 	return nil
 }
 
@@ -52,15 +69,13 @@ func (u *LanguageController) handleCreateLanguage() gin.HandlerFunc {
 			return
 		}
 
-		ulid := ulid.MustNew(ulid.Timestamp(time.Now()), u.entropy)
-		modelLanguage.Id = ulid.String()
-
 		err := u.Validate(c.GetString("apiPath")+"/put", modelLanguage)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
 			return
 		}
-		_, err = u.Add(u.GetDBName(), u.GetCollectionName(), modelLanguage, false)
+		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelLanguage, true)
+		modelLanguage.Id = int(id)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_FAILED, err, nil))
@@ -68,6 +83,7 @@ func (u *LanguageController) handleCreateLanguage() gin.HandlerFunc {
 		}
 
 		serviceutils.GetInstance().PublishEvent(modelLanguage, configmanager.GetInstance().MicroServiceName, "vidmicro.language.created")
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelLanguage.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix), modelLanguage.EncodeRedisData())
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelLanguage))
 	}
 }
@@ -75,7 +91,8 @@ func (u *LanguageController) handleCreateLanguage() gin.HandlerFunc {
 func (u *LanguageController) handleGetLanguage() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelLanguage := models.Language{}
-		modelLanguage.Id = c.Query("id")
+		id, _ := strconv.ParseInt(c.Query("id"), 10, 64)
+		modelLanguage.Id = int(id)
 
 		err := u.Validate(c.GetString("apiPath")+"/get", modelLanguage)
 		if err != nil {
@@ -85,7 +102,7 @@ func (u *LanguageController) handleGetLanguage() gin.HandlerFunc {
 
 		query := map[string]interface{}{"id": modelLanguage.Id}
 
-		if modelLanguage.Id == "" {
+		if modelLanguage.Id <= 0 {
 			query = map[string]interface{}{}
 		}
 
@@ -144,6 +161,7 @@ func (u *LanguageController) handleUpdateLanguage() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_FAILED, err, nil))
 			return
 		}
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelLanguage.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix), modelLanguage.EncodeRedisData())
 		serviceutils.GetInstance().PublishEvent(modelLanguage, configmanager.GetInstance().MicroServiceName, "vidmicro.language.updated")
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
 	}
@@ -169,6 +187,8 @@ func (u *LanguageController) handleDeleteLanguage() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_FAILED, err, nil))
 			return
 		}
+
+		cache.GetInstance().Del(fmt.Sprintf("%d%s%s", modelLanguage.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix))
 		serviceutils.GetInstance().PublishEvent(modelLanguage, configmanager.GetInstance().MicroServiceName, "vidmicro.language.deleted")
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_SUCCESS, err, nil))
 	}

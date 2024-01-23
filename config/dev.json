@@ -15,7 +15,8 @@
                         "vidmicro.title.created",
                         "vidmicro.title.updated",
                         "vidmicro.title.deleted",
-                        "vidmicro.title.language.deleted"
+                        "vidmicro.title.language.deleted",
+                        "vidmicro.title.language.added"
                     ],
     "printWarning": true,
     "printInfo": true,
@@ -34,5 +35,6 @@
         "bucket": "vid-micro-test",
         "folder": "static"
     },
-    "pageSize": 10
+    "pageSize": 10,
+    "redisSeprator": "_"
 }

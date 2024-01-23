@@ -1,7 +1,6 @@
 package configmanager
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -10,33 +9,45 @@ import (
 
 	configModels "com.code.vidmicro/com.code.vidmicro/settings/configmanager/cofingModels"
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
+	"github.com/bytedance/sonic"
 )
 
 type config struct {
-	Address            string                      `json:"address"`
-	Database           configModels.DatabaseConfig `json:"database"`
-	ClassName          string
-	Controllers        []string                       `json:"controllers"`
-	SessionKey         string                         `json:"sessionKey"`
-	RegisteredTopics   []string                       `json:"registeredTopics"`
-	PublishingTopics   []string                       `json:"publishingTopics"`
-	PrintWarning       bool                           `json:"printWarning"`
-	PrintInfo          bool                           `json:"printInfo"`
-	SubscribedTopics   map[string]interface{}         `json:"subscribedTopics"`
-	MicroServiceName   string                         `json:"microServiceName"`
-	PublisherBatchSize int64                          `json:"publisherBatchSize"`
-	NatsServerAddress  string                         `json:"natsServer"`
-	IsProduction       bool                           `json:"isProduction"`
-	SessionSecret      string                         `json:"sessionSecret"`
-	Redis              configModels.RedisConnection   `json:"redis"`
-	ServiceLogName     string                         `json:"serviceLogName"`
-	MapApis            map[string][]string            `json:"apis"`
-	TokenExpiry        int64                          `json:"tokenExpiry"`
-	MapAcl             map[string]map[string][]string `json:"acl"`
-	S3Settings         configModels.S3Connection      `json:"s3Settings"`
-	PageSize           int64                          `json:"pageSize"`
-	Acl                map[string]map[string]*utils.Set
-	Apis               map[string]*utils.Set
+	Address                      string                      `json:"address"`
+	Database                     configModels.DatabaseConfig `json:"database"`
+	ClassName                    string
+	Controllers                  []string                       `json:"controllers"`
+	SessionKey                   string                         `json:"sessionKey"`
+	RegisteredTopics             []string                       `json:"registeredTopics"`
+	PublishingTopics             []string                       `json:"publishingTopics"`
+	PrintWarning                 bool                           `json:"printWarning"`
+	PrintInfo                    bool                           `json:"printInfo"`
+	SubscribedTopics             map[string]interface{}         `json:"subscribedTopics"`
+	MicroServiceName             string                         `json:"microServiceName"`
+	PublisherBatchSize           int64                          `json:"publisherBatchSize"`
+	NatsServerAddress            string                         `json:"natsServer"`
+	IsProduction                 bool                           `json:"isProduction"`
+	SessionSecret                string                         `json:"sessionSecret"`
+	Redis                        configModels.RedisConnection   `json:"redis"`
+	ServiceLogName               string                         `json:"serviceLogName"`
+	MapApis                      map[string][]string            `json:"apis"`
+	TokenExpiry                  int64                          `json:"tokenExpiry"`
+	MapAcl                       map[string]map[string][]string `json:"acl"`
+	S3Settings                   configModels.S3Connection      `json:"s3Settings"`
+	PageSize                     int64                          `json:"pageSize"`
+	TitlesPostfix                string                         `json:"titlesPostfix"`
+	RedisSeprator                string                         `json:"redisSeprator"`
+	SingleTitlePostfix           string                         `json:"singleTitlePostfix"`
+	LanguagePostfix              string                         `json:"languagePostfix"`
+	StatusPostfix                string                         `json:"statusPostfix"`
+	TitleExpiryTime              int                            `json:"titleExpiryTime"`
+	LanguageMetadataPostfix      string                         `json:"languageMetadataPostfix"`
+	LanguageMetaExpiryTime       int                            `json:"languageMetaExpiryTime"`
+	ContentTypePostfix           string                         `json:"contentTypePostfix"`
+	ContentTitleLanguagesPostfix string                         `json:"contentTitleLanguagesPostfix"`
+	TitlesLanguageExpirationTime int                            `json:"titlesLanguageExpirationTime"`
+	Acl                          map[string]map[string]*utils.Set
+	Apis                         map[string]*utils.Set
 }
 
 var (
@@ -62,7 +73,7 @@ func (c *config) Setup() {
 	}
 	defer configFile.Close()
 
-	decoder := json.NewDecoder(configFile)
+	decoder := sonic.ConfigDefault.NewDecoder(configFile)
 	err = decoder.Decode(&c)
 
 	if err != nil {
@@ -78,7 +89,7 @@ func (c *config) Setup() {
 	}
 	defer globalConfigFile.Close()
 
-	decoder = json.NewDecoder(globalConfigFile)
+	decoder = sonic.ConfigDefault.NewDecoder(globalConfigFile)
 	err = decoder.Decode(&c)
 
 	if err != nil {
@@ -114,7 +125,7 @@ func (c *config) Setup() {
 // GetConfigNameAndPath get the config name on the basis of flag
 func (c *config) getConfigNameAndPath() (string, string, string) {
 	serverType := flag.String("env", "DEV", "use development server by default")
-	configPath := flag.String("con", "TITLESSERVICE", "use Uploader server by default")
+	configPath := flag.String("con", "CONTENTSERVICE", "use Uploader server by default")
 
 	var conName string
 	var conPath string

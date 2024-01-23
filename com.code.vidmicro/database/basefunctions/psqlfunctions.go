@@ -3,6 +3,7 @@ package basefunctions
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -219,6 +220,72 @@ func (u *PSqlFunctions) Find(dbName basetypes.DBName, collectionName basetypes.C
 	rows, err := conn.Query(query, values...)
 
 	return rows, err
+}
+
+func (u *PSqlFunctions) Paginate(dbName basetypes.DBName, collectionName basetypes.CollectionName, keys string, condition map[string]interface{}, result interface{}, useOr bool, appendQuery string, addParenthesis bool, pageSize int, page int) (*sql.Rows, int64, error) {
+	conn := baseconnections.GetInstance().GetConnection(basetypes.PSQL).GetDB(basetypes.PSQL).(*sql.DB)
+	query := "SELECT * FROM " + string(collectionName)
+
+	if keys != "" {
+		query = "SELECT " + keys + " FROM " + string(collectionName)
+	}
+
+	whereClause := ""
+	values := make([]interface{}, 0)
+
+	placeholderCount := 1
+
+	for key, val := range condition {
+		if whereClause != "" {
+			if !useOr {
+				whereClause += " AND "
+			} else {
+				whereClause += " OR "
+			}
+		} else {
+			whereClause += " WHERE "
+			if addParenthesis {
+				whereClause = whereClause + "("
+			}
+		}
+		whereClause += key + "= $" + strconv.FormatInt(int64(placeholderCount), 10) + " "
+		placeholderCount++
+		values = append(values, val)
+	}
+	if addParenthesis {
+		whereClause = whereClause + ")"
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", string(collectionName)) + whereClause
+
+	var count int64
+	row, err := conn.Query(countQuery, values...)
+	if err != nil {
+		return nil, -1, err
+	}
+
+	countQueryRows := 0
+	for row.Next() {
+		countQueryRows++
+		err = row.Scan(&count)
+		if err != nil {
+			return nil, -1, err
+		}
+	}
+
+	query += whereClause + appendQuery
+
+	query = fmt.Sprintf(query+" LIMIT %d", pageSize)
+
+	// If there is a skip offset specified, append the OFFSET clause to the query.
+	skip := (page - 1) * pageSize
+	if skip > 0 {
+		query = fmt.Sprintf(query+" OFFSET %d", skip)
+	}
+
+	rows, err := conn.Query(query, values...)
+
+	return rows, count, err
 }
 
 func (u *PSqlFunctions) UpdateOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query string, data []interface{}, upsert bool) error {

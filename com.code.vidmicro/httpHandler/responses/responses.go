@@ -1,66 +1,67 @@
 package responses
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"sync"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
+	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 )
 
 const (
-	WELCOME_TO_SSO          = 1000
-	API_NOT_AVAILABLE       = 1001
-	OPTIONS_NOT_ALLOWED     = 1002
-	CREATE_SESSION_SUCCESS  = 1003
-	GENERATING_UUID_FAILED  = 1004
-	REGISTER_USER_SUCCESS   = 1005
-	SESSION_ID_NOT_PRESENT  = 1006
-	SESSION_NOT_VALID       = 1007
-	CREATE_SESSION_FAILED   = 1008
-	MALFORMED_JSON          = 1009
-	VALIDATION_FAILED       = 1010
-	DB_ERROR                = 1011
-	CREATE_HASH_FAILED      = 1012
-	BASIC_AUTH_FAILED       = 1013
-	GET_USER_SUCCESS        = 1014
-	GET_USER_FAILED         = 1015
-	USERNAME_EXISTS_FAILED  = 1016
-	PASSWORD_INCORRECT      = 1017
-	LOGIN_SUCCESS           = 1018
-	UPDATE_FAILED           = 1019
-	UPDATE_SUCCESS          = 1020
-	LOGOUT_SUCCESS          = 1021
-	LOGOUT_FAILED           = 1022
-	SESSION_NOT_FOUND       = 1023
-	METHOD_NOT_AVAILABLE    = 1024
-	ADDING_DB_FAILED        = 1025
-	ERROR_READING_USER      = 1026
-	PASSWORD_MISMATCHED     = 1027
-	ERROR_CREATING_JWT      = 1028
-	USER_BLOCKED            = 1029
-	TOKEN_EXPIRED           = 1030
-	REFRESH_TOKEN_REQUIRED  = 1031
-	INVALID_REFRESH_TOKEN   = 1032
-	REFRESH_TOKEN_SUCCESS   = 1033
-	API_NOT_ACCESSABLE      = 1034
-	FAILED_BLACK_LISTING    = 1035
-	BLACK_LIST_SUCCESS      = 1036
-	UPLOADING_AVATAR_FAILED = 1037
-	FAILED_UPDATING_USER    = 1038
-	UPDATING_USER_SUCCESS   = 1039
-	NOTHIN_TO_UPDATE        = 1040
-	PUTTING_SUCCESS         = 1041
-	PUTTING_FAILED          = 1042
-	GETTING_FAILED          = 1043
-	GETTING_SUCCESS         = 1044
-	UPDATING_SUCCESS        = 1045
-	UPDATING_FAILED         = 1046
-	DELETING_SUCCESS        = 1047
-	DELETING_FAILED         = 1048
+	WELCOME_TO_SSO              = 1000
+	API_NOT_AVAILABLE           = 1001
+	OPTIONS_NOT_ALLOWED         = 1002
+	CREATE_SESSION_SUCCESS      = 1003
+	GENERATING_UUID_FAILED      = 1004
+	REGISTER_USER_SUCCESS       = 1005
+	SESSION_ID_NOT_PRESENT      = 1006
+	SESSION_NOT_VALID           = 1007
+	CREATE_SESSION_FAILED       = 1008
+	MALFORMED_JSON              = 1009
+	VALIDATION_FAILED           = 1010
+	DB_ERROR                    = 1011
+	CREATE_HASH_FAILED          = 1012
+	BASIC_AUTH_FAILED           = 1013
+	GET_USER_SUCCESS            = 1014
+	GET_USER_FAILED             = 1015
+	USERNAME_EXISTS_FAILED      = 1016
+	PASSWORD_INCORRECT          = 1017
+	LOGIN_SUCCESS               = 1018
+	UPDATE_FAILED               = 1019
+	UPDATE_SUCCESS              = 1020
+	LOGOUT_SUCCESS              = 1021
+	LOGOUT_FAILED               = 1022
+	SESSION_NOT_FOUND           = 1023
+	METHOD_NOT_AVAILABLE        = 1024
+	ADDING_DB_FAILED            = 1025
+	ERROR_READING_USER          = 1026
+	PASSWORD_MISMATCHED         = 1027
+	ERROR_CREATING_JWT          = 1028
+	USER_BLOCKED                = 1029
+	TOKEN_EXPIRED               = 1030
+	REFRESH_TOKEN_REQUIRED      = 1031
+	INVALID_REFRESH_TOKEN       = 1032
+	REFRESH_TOKEN_SUCCESS       = 1033
+	API_NOT_ACCESSABLE          = 1034
+	FAILED_BLACK_LISTING        = 1035
+	BLACK_LIST_SUCCESS          = 1036
+	UPLOADING_AVATAR_FAILED     = 1037
+	FAILED_UPDATING_USER        = 1038
+	UPDATING_USER_SUCCESS       = 1039
+	NOTHIN_TO_UPDATE            = 1040
+	PUTTING_SUCCESS             = 1041
+	PUTTING_FAILED              = 1042
+	GETTING_FAILED              = 1043
+	GETTING_SUCCESS             = 1044
+	UPDATING_SUCCESS            = 1045
+	UPDATING_FAILED             = 1046
+	DELETING_SUCCESS            = 1047
+	DELETING_FAILED             = 1048
+	LANGUAGE_NOT_ADDED_IN_TITLE = 1049
 )
 
 type Responses struct {
@@ -130,6 +131,7 @@ func (u *Responses) InitResponses() {
 	u.responses[UPDATING_FAILED] = "UPDATING_FAILED"
 	u.responses[DELETING_SUCCESS] = "DELETING_SUCCESS"
 	u.responses[DELETING_FAILED] = "DELETING_FAILED"
+	u.responses[LANGUAGE_NOT_ADDED_IN_TITLE] = "LANGUAGE_NOT_ADDED_IN_TITLE"
 }
 
 // GetResponse returns the message for the particular response code
@@ -143,7 +145,7 @@ func (u *Responses) getResponse(code int) map[string]interface{} {
 
 func (u *Responses) WriteResponse(c *gin.Context, code int, err error, data interface{}) map[string]interface{} {
 	returnMap := u.getResponse(code)
-	queryBytes, _ := json.Marshal(c.Request.URL.Query())
+	queryBytes, _ := sonic.Marshal(c.Request.URL.Query())
 
 	jsonData, _ := ioutil.ReadAll(c.Request.Body)
 	// dst := bytes.Buffer{}
@@ -171,7 +173,7 @@ func (u *Responses) WriteResponse(c *gin.Context, code int, err error, data inte
 	}
 	if data != nil {
 		returnMap["data"] = data
-		dataBytes, _ := json.Marshal(data)
+		dataBytes, _ := sonic.Marshal(data)
 		auditTrial.Response = string(dataBytes)
 	}
 	log.Println("auditLogs:", auditTrial)
@@ -217,10 +219,10 @@ func (u *Responses) WriteJsonResponse(w http.ResponseWriter, r *http.Request, co
 
 	if data != nil {
 		returnMap["data"] = data
-		dataBytes, _ := json.Marshal(data)
+		dataBytes, _ := sonic.Marshal(data)
 		auditTrial.Response = string(dataBytes)
 	}
-	err = json.NewEncoder(w).Encode(returnMap)
+	err = sonic.ConfigDefault.NewEncoder(w).Encode(returnMap)
 	if err != nil {
 		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
 		return

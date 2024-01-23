@@ -17,6 +17,17 @@ import (
 
 const saltLength = 16
 
+func InterfaceArrayToIntArray(floatArray []interface{}) []int {
+	intArray := make([]int, len(floatArray))
+
+	for i, v := range floatArray {
+		// Convert float64 to int using rounding or other logic as needed
+		intArray[i] = int(math.Round(v.(float64)))
+	}
+
+	return intArray
+}
+
 func GenerateUUID() (string, error) {
 	uuid := make([]byte, 16)
 	_, err := rand.Read(uuid)

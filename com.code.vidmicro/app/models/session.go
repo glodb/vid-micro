@@ -1,8 +1,9 @@
 package models
 
 import (
-	"encoding/json"
 	"time"
+
+	"github.com/bytedance/sonic"
 )
 
 //This structure mainly handle the session
@@ -31,10 +32,10 @@ type Session struct {
 }
 
 func (ts *Session) EncodeRedisData() []byte {
-	buf, _ := json.Marshal(ts)
+	buf, _ := sonic.Marshal(ts)
 	return buf
 }
 
 func (ts *Session) DecodeRedisData(data []byte) {
-	json.Unmarshal(data, &ts)
+	sonic.Unmarshal(data, &ts)
 }

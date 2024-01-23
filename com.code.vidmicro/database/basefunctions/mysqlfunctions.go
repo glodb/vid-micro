@@ -48,6 +48,9 @@ func (u *MySqlFunctions) EnsureIndex(dbName basetypes.DBName, collectionName bas
 func (u *MySqlFunctions) AddMany(dbName basetypes.DBName, collectionName basetypes.CollectionName, data []interface{}, scan bool) ([]int64, error) {
 	return nil, errors.New("unimplemented exception")
 }
+func (u *MySqlFunctions) Paginate(dbName basetypes.DBName, collectionName basetypes.CollectionName, keys string, condition map[string]interface{}, result interface{}, useOr bool, appendQuery string, addParenthesis bool, pageSize int, page int) (*sql.Rows, int64, error) {
+	return nil, -1, errors.New("unimplemented exception")
+}
 func (u *MySqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.CollectionName, data interface{}, scan bool) (int64, error) {
 	conn := baseconnections.GetInstance().GetConnection(basetypes.MYSQL).GetDB(basetypes.MYSQL).(*sql.DB)
 	query := "INSERT INTO " + string(collectionName)

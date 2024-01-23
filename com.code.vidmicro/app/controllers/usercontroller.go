@@ -1,9 +1,7 @@
 package controllers
 
 import (
-	"crypto/rand"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -19,35 +17,35 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/s3uploader"
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
-	"github.com/oklog/ulid/v2"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/rs/xid"
 )
 
 type UserController struct {
 	baseinterfaces.BaseControllerFactory
 	basefunctions.BaseFucntionsInterface
 	basevalidators.ValidatorInterface
-	entropy io.Reader
 }
 
 func (u *UserController) generateJWT(user models.User) (string, error) {
-	claims := models.Claims{
-		User: user,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Duration(configmanager.GetInstance().TokenExpiry) * time.Minute).Unix(), // Set expiration time
-			IssuedAt:  time.Now().Unix(),
-		},
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"exp": time.Now().Add(time.Minute * time.Duration(configmanager.GetInstance().TokenExpiry)).Unix(), // Set expiration time to 1 hour from now
+	})
+
+	// Sign the token with the secret key
+	tokenString, err := token.SignedString([]byte(configmanager.GetInstance().SessionSecret))
+	if err != nil {
+		return "", err
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(configmanager.GetInstance().SessionSecret))
+	return tokenString, nil
 }
 
 func (u *UserController) generateRefreshToken() (string, error) {
 	// Generate a random refresh token (you may use a library for better randomness)
-	ulid := ulid.MustNew(ulid.Timestamp(time.Now()), u.entropy)
-	return string(ulid.String()), nil
+	newXID := xid.New()
+	return string(newXID.String()), nil
 }
 
 func (u *UserController) GetDBName() basetypes.DBName {
@@ -59,7 +57,6 @@ func (u *UserController) GetCollectionName() basetypes.CollectionName {
 }
 
 func (u *UserController) DoIndexing() error {
-	u.entropy = ulid.Monotonic(rand.Reader, 0)
 	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.User{})
 	return nil
 }
@@ -208,7 +205,7 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 				cache.GetInstance().SAdd([]interface{}{strconv.FormatInt(int64(user.Id), 10) + "_all_sessions", sessionId})
 
 				cache.GetInstance().Set(sessionId, session.EncodeRedisData())
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]string{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": modelUser.Username, "tokenType": "HTTPBasicAuth"}))
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]string{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "HTTPBasicAuth"}))
 
 			} else {
 				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PASSWORD_MISMATCHED, err, nil))

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -11,6 +12,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/baserouter"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basevalidators"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/responses"
+	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"github.com/gin-gonic/gin"
 )
@@ -31,6 +33,27 @@ func (u StatusController) GetCollectionName() basetypes.CollectionName {
 
 func (u StatusController) DoIndexing() error {
 	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.Status{})
+
+	keys := cache.GetInstance().GetKeys("*" + configmanager.GetInstance().StatusPostfix)
+	cache.GetInstance().DelMany(keys)
+
+	rows, _ := u.Find(u.GetDBName(), u.GetCollectionName(), "", map[string]interface{}{}, &models.Status{}, false, "", false)
+
+	defer rows.Close()
+	// Iterate over the rows.
+	for rows.Next() {
+		// Create a User struct to scan values into.
+
+		tempStatus := models.Status{}
+
+		// Scan the row's values into the User struct.
+		err := rows.Scan(&tempStatus.Id, &tempStatus.Name)
+		if err != nil {
+			break
+		}
+
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", tempStatus.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix), tempStatus.EncodeRedisData())
+	}
 	return nil
 }
 
@@ -58,6 +81,7 @@ func (u *StatusController) handleCreateStatus() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_FAILED, err, nil))
 			return
 		}
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelStatus.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix), modelStatus.EncodeRedisData())
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelStatus))
 	}
 }
@@ -127,7 +151,7 @@ func (u *StatusController) handleUpdateStatus() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_FAILED, err, nil))
 			return
 		}
-
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelStatus.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix), modelStatus.EncodeRedisData())
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
 	}
 }
@@ -153,6 +177,7 @@ func (u *StatusController) handleDeleteStatus() gin.HandlerFunc {
 			return
 		}
 
+		cache.GetInstance().Del(fmt.Sprintf("%d%s%s", modelStatus.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix))
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_SUCCESS, err, nil))
 	}
 }

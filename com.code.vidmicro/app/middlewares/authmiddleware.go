@@ -3,7 +3,6 @@ package middlewares
 import (
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -11,8 +10,8 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/app/models"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/responses"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type AuthMiddleware struct {
@@ -20,27 +19,33 @@ type AuthMiddleware struct {
 
 func (u *AuthMiddleware) isTokenValid(tokenString string) (bool, error) {
 
-	// Parse the token
-	token, err := jwt.ParseWithClaims(tokenString, &models.Claims{}, func(token *jwt.Token) (interface{}, error) {
-		// Validate the signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(configmanager.GetInstance().SessionSecret), nil // Replace with your actual session secret
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Provide the key for token validation
+		return []byte(configmanager.GetInstance().SessionSecret), nil
 	})
 
-	// Check for parsing errors
 	if err != nil {
 		return false, err
 	}
 
-	// Verify if the token is valid
-	if claims, ok := token.Claims.(*models.Claims); ok && token.Valid {
-		// Check expiration time
-		return time.Unix(claims.ExpiresAt, 0).After(time.Now()), nil
-	}
+	// Check if the token is valid
+	if token.Valid {
+		// Token is valid, check the expiration time
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			expirationTime := time.Unix(int64(claims["exp"].(float64)), 0)
+			currentTime := time.Now()
 
-	return false, errors.New("token is not valid")
+			if expirationTime.After(currentTime) {
+				return true, nil
+			} else {
+				return false, errors.New("token has expired")
+			}
+		} else {
+			return false, errors.New("error extracting claims")
+		}
+	} else {
+		return false, errors.New("error parsing token")
+	}
 }
 
 func (u *AuthMiddleware) GetHandlerFunc() gin.HandlerFunc {

@@ -1,13 +1,10 @@
 package controllers
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
-	"math/rand"
+	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
@@ -17,17 +14,20 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/baserouter"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basevalidators"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/responses"
+	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/s3uploader"
+	"com.code.vidmicro/com.code.vidmicro/settings/serviceutils"
+	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
-	"github.com/oklog/ulid/v2"
+	"github.com/lib/pq"
+	"github.com/rs/xid"
 )
 
 type TitlesController struct {
 	baseinterfaces.BaseControllerFactory
 	basefunctions.BaseFucntionsInterface
 	basevalidators.ValidatorInterface
-	entropy io.Reader
 }
 
 func (u TitlesController) GetDBName() basetypes.DBName {
@@ -49,10 +49,7 @@ func (u *TitlesController) SetBaseFunctions(inter basefunctions.BaseFucntionsInt
 
 func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// --Add language to language meta and save the id in title
-		// Send the available languages and title to content service
-		// Save the data in meilisearch
-		// Clear paginated data from cache
+		// TODO: Save the data in meilisearch
 		modelTitles := models.Titles{}
 		if err := c.ShouldBind(&modelTitles); err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
@@ -61,7 +58,7 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 
 		titlesLanguages := make([]models.TitlesLanguage, 0)
 
-		err := json.Unmarshal([]byte(modelTitles.Languages), &titlesLanguages)
+		err := sonic.Unmarshal([]byte(modelTitles.Languages), &titlesLanguages)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
 			return
@@ -72,103 +69,29 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 			return
 		}
 
-		languageController, _ := u.BaseControllerFactory.GetController(baseconst.Language)
-		statusController, _ := u.BaseControllerFactory.GetController(baseconst.Status)
-
-		uniqueLanguages := make(map[string]bool)
-		uniqueStatuses := make(map[int]bool)
-
-		languageInQuery := " Where id IN ("
-		statusInQuery := " Where id IN ("
-
 		languagesMetadata := make([]interface{}, 0)
+
+		titlesSummary := models.TitlesSummary{}
 
 		for _, titlesLanguage := range titlesLanguages {
 
 			languageMetadata := models.LanguageMeta{LanguageId: titlesLanguage.LanguageId, StatusId: titlesLanguage.StatusId}
-			u.entropy = ulid.Monotonic(rand.New(rand.NewSource(time.Now().UnixNano())), 0)
-			ulid := ulid.MustNew(ulid.Timestamp(time.Now()), u.entropy)
-			languageMetadata.Id = ulid.String()
+			newXID := xid.New()
+			languageMetadata.Id = newXID.String()
+
+			if !cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", languageMetadata.LanguageId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix)) {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the language is not found id:%d", languageMetadata.LanguageId), nil))
+				return
+			}
+
+			if !cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", languageMetadata.StatusId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix)) {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the sstatus is not found id:%d for language:%d", languageMetadata.StatusId, languageMetadata.LanguageId), nil))
+				return
+			}
+
 			modelTitles.LanguagesMeta = append(modelTitles.LanguagesMeta, languageMetadata.Id)
-
-			if ok := uniqueLanguages[titlesLanguage.LanguageId]; !ok {
-				if len(uniqueLanguages) != 0 {
-					languageInQuery += ","
-				}
-				languageInQuery += "'" + titlesLanguage.LanguageId + "'"
-				uniqueLanguages[titlesLanguage.LanguageId] = true
-			}
-
-			if ok := uniqueStatuses[titlesLanguage.StatusId]; !ok {
-				if len(uniqueStatuses) != 0 {
-					statusInQuery += ","
-				}
-				statusInQuery += strconv.FormatInt(int64(titlesLanguage.StatusId), 10)
-				uniqueStatuses[titlesLanguage.StatusId] = true
-			}
 			languagesMetadata = append(languagesMetadata, languageMetadata)
-		}
-
-		languageInQuery += ")"
-		statusInQuery += ")"
-
-		languageRows, err := languageController.Find(languageController.GetDBName(), languageController.GetCollectionName(), "", map[string]interface{}{}, models.Language{}, false, languageInQuery, false)
-
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
-			return
-		}
-		defer languageRows.Close()
-
-		languages := make([]models.Language, 0)
-
-		// Iterate over the rows.
-		for languageRows.Next() {
-			// Create a User struct to scan values into.
-
-			tempLanguage := models.Language{}
-
-			// Scan the row's values into the User struct.
-			err := languageRows.Scan(&tempLanguage.Id, &tempLanguage.Name, &tempLanguage.Code)
-			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
-				return
-			}
-
-			languages = append(languages, tempLanguage)
-		}
-
-		statusRows, err := statusController.Find(statusController.GetDBName(), statusController.GetCollectionName(), "", map[string]interface{}{}, models.Language{}, false, statusInQuery, false)
-
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
-			return
-		}
-		defer languageRows.Close()
-
-		statuses := make([]models.Status, 0)
-
-		// Iterate over the rows.
-		for statusRows.Next() {
-			// Create a User struct to scan values into.
-
-			tempStatus := models.Status{}
-
-			// Scan the row's values into the User struct.
-			err := statusRows.Scan(&tempStatus.Id, &tempStatus.Name)
-			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
-				return
-			}
-
-			statuses = append(statuses, tempStatus)
-		}
-
-		defer statusRows.Close()
-
-		if (len(statuses) != len(uniqueStatuses)) || len(languages) != len(uniqueLanguages) {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, errors.New("status id or language id not found"), nil))
-			return
+			titlesSummary.Languages = append(titlesSummary.Languages, titlesLanguage.LanguageId)
 		}
 
 		err = u.Validate(c.GetString("apiPath")+"/put", modelTitles)
@@ -194,7 +117,7 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 			}
 		}
 
-		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelTitles, false)
+		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelTitles, true)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_FAILED, err, nil))
 			return
@@ -206,6 +129,7 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 		}
 
 		modelTitles.Id = int(id)
+
 		languageMetadataController, _ := u.BaseControllerFactory.GetController(baseconst.LanguageMeta)
 		_, err = languageMetadataController.AddMany(languageMetadataController.GetDBName(), languageMetadataController.GetCollectionName(), languagesMetadata, false)
 
@@ -214,42 +138,114 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 			return
 		}
 
+		titlesSummary.Id = int(id)
+		titlesSummary.OriginalTitle = modelTitles.OriginalTitle
+
+		serviceutils.GetInstance().PublishEvent(titlesSummary, configmanager.GetInstance().ClassName, "vidmicro.title.created")
+
+		pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesPostfix
+
+		keys := cache.GetInstance().GetKeys(pattern)
+		cache.GetInstance().DelMany(keys)
+
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelTitles))
 	}
 }
 
 func (u *TitlesController) handleGetTitles() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// modelTitles := models.Titles{}
-		// id, _ := strconv.ParseInt(c.Query("id"), 10, 64)
-		// modelTitles.Id = int(id)
+		modelTitles := models.Titles{}
+		idString := c.Query("id")
+		id, _ := strconv.ParseInt(c.Query("id"), 10, 64)
+		page := int64(1)
+		pageString := c.Query("page")
+		modelTitles.Id = int(id)
 
-		// err := u.Validate(c.GetString("apiPath")+"/get", modelTitles)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
-		// 	return
-		// }
+		err := u.Validate(c.GetString("apiPath")+"/get", modelTitles)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
 
-		// rows, err := u.FindOne(u.GetDBName(), u.GetCollectionName(), "", map[string]interface{}{"id": modelTitles.Id}, &modelTitles, false, " Limit 1", false)
+		query := map[string]interface{}{"id": modelTitles.Id}
 
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
-		// 	return
-		// }
-		// defer rows.Close()
+		if pageString != "" {
+			pageInt, _ := strconv.ParseInt(c.Query("page"), 10, 64)
+			page = pageInt
+		} else {
+			pageString = "1"
+		}
 
-		// // Iterate over the rows.
-		// for rows.Next() {
-		// 	// Create a User struct to scan values into.
+		key := pageString + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesPostfix
 
-		// 	// Scan the row's values into the User struct.
-		// 	err := rows.Scan(&modelTitles.Id, &modelTitles.Name, &modelTitles.Slug)
-		// 	if err != nil {
-		// 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
-		// 		return
-		// 	}
-		// }
-		// c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, modelTitles))
+		if modelTitles.Id <= 0 {
+			query = map[string]interface{}{}
+		} else {
+			key = pageString + configmanager.GetInstance().RedisSeprator +
+				idString +
+				configmanager.GetInstance().RedisSeprator +
+				configmanager.GetInstance().ClassName +
+				configmanager.GetInstance().RedisSeprator +
+				configmanager.GetInstance().SingleTitlePostfix +
+				configmanager.GetInstance().TitlesPostfix
+		}
+
+		if data, err := cache.GetInstance().Get(key); err == nil && len(data) > 0 {
+			pr := models.PaginationResults{}
+			pr.DecodeRedisData(data)
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, pr))
+			return //Found in cache
+		}
+
+		pageSize := configmanager.GetInstance().PageSize
+
+		if c.Query("limit") != "" {
+			pageSizeInt, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
+			pageSize = pageSizeInt
+		}
+
+		rows, count, err := u.Paginate(u.GetDBName(), u.GetCollectionName(), "", query, &modelTitles, false, "", false, int(pageSize), int(page))
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+			return
+		}
+		defer rows.Close()
+
+		titles := make([]models.Titles, 0)
+		// Iterate over the rows.
+		for rows.Next() {
+			// Create a User struct to scan values into.
+			tempTitle := models.Titles{}
+
+			// Scan the row's values into the User struct.
+			err := rows.Scan(&tempTitle.Id, &tempTitle.OriginalTitle, &tempTitle.Year, &tempTitle.CoverUrl, pq.Array(&tempTitle.LanguagesMeta))
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+				return
+			}
+
+			controller, _ := u.BaseControllerFactory.GetController(baseconst.LanguageMeta)
+			languageController := controller.(*LanguageMetadataController)
+
+			tempTitle.LanguagesDetails, err = languageController.GetLanguageDetails(tempTitle.LanguagesMeta)
+
+			if err != nil {
+				tempTitle.LanguagesDetails = make([]models.LanguageMetaDetails, 0)
+			}
+
+			titles = append(titles, tempTitle)
+		}
+
+		pagination := models.NewPagination(count, int(pageSize), int(page))
+		pr := models.PaginationResults{Pagination: pagination, Data: titles}
+
+		if modelTitles.Id <= 0 {
+			cache.GetInstance().Set(key, pr.EncodeRedisData())
+		} else {
+			cache.GetInstance().SetEx(key, pr.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
+		}
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, pr))
 	}
 }
 

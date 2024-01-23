@@ -10,7 +10,12 @@
     "publishingTopics": [
         "vidmicro.language.created",
         "vidmicro.language.updated",
-        "vidmicro.language.deleted"
+        "vidmicro.language.deleted",
+        "vidmicro.title.created",
+        "vidmicro.title.updated",
+        "vidmicro.title.deleted",
+        "vidmicro.title.language.deleted",
+        "vidmicro.title.language.added"
     ],
     "subscribedTopics": {
     },
@@ -44,5 +49,12 @@
             "/api/languages":["GET"],
             "/api/titles": ["GET"]
         }
-    }
+    },
+    "titlesPostfix" :"titles_cached_pages",
+    "singleTitlePostfix": "single_",
+    "languagePostfix": "_titles_languages",
+    "statusPostfix": "_titles_status",
+    "languageMetadataPostfix": "_titles_languages_metadata_postfix",
+    "languageMetaExpiryTime":600000,
+    "titleExpiryTime": 600000
 }

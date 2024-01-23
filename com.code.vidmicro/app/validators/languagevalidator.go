@@ -19,7 +19,7 @@ func (u *LanguageValidator) Validate(apiName string, data interface{}) error {
 	case "/api/language/delete":
 		fallthrough
 	case "/api/language/post":
-		if gnresData.Id == "" {
+		if gnresData.Id <= 0 {
 			return errors.New("language id is required")
 		}
 	}
