@@ -14,9 +14,9 @@ type baseFunctions struct {
 var instance *baseFunctions
 var once sync.Once
 
-//Singleton. Returns a single object of Factory
-//This is pure lazy factory, doesnot even create functions class till dbname is specifically passed
-//This also part of flyweight design pattern
+// Singleton. Returns a single object of Factory
+// This is pure lazy factory, doesnot even create functions class till dbname is specifically passed
+// This also part of flyweight design pattern
 func GetInstance() *baseFunctions {
 	// var instance
 	once.Do(func() {
@@ -41,7 +41,11 @@ func (u *baseFunctions) GetFunctions(dbType basetypes.DbType, dbName basetypes.D
 		}
 	case basetypes.PSQL:
 		{ //Adding this because ken wants to use framework for IOT
-			return nil, errors.New("Unimplemented")
+			connection := PSqlFunctions{}
+			functionsInterface := connection.GetFunctions()
+
+			u.dbfunctions[dbType] = &functionsInterface
+			return u.dbfunctions[dbType], nil
 		}
 	}
 	return nil, errors.New("Not configured for this db")

@@ -1,7 +1,6 @@
 package serviceutils
 
 import (
-	"encoding/json"
 	"log"
 	"math"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/topics"
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
+	"github.com/bytedance/sonic"
 	"github.com/rs/xid"
 )
 
@@ -76,7 +76,7 @@ func (ts *EventPublisher) sendBatches(element []interface{}, dedupId string, key
 		if batchEnd > length {
 			batchEnd = length
 		}
-		body, _ := json.Marshal(element[batchStart:batchEnd])
+		body, _ := sonic.Marshal(element[batchStart:batchEnd])
 		msg := &Message{
 			Header: map[string]string{
 				"id":      values[0],
@@ -111,7 +111,7 @@ func (ts *EventPublisher) sendEvents() {
 	}
 }
 
-func (ts *EventPublisher) PublishEvent(data interface{}, serviceName string, topic string) error {
+func (ts *EventPublisher) publishEvent(data interface{}, serviceName string, topic string) error {
 	// Marshal to JSON string
 	if topics.GetInstance().ValidatePublishableTopics(topic) {
 

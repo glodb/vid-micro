@@ -1,0 +1,46 @@
+{
+    "database": {
+        "dbname": "content"
+    },
+    "microServiceName": "contentService",
+    "address": "localhost:8082",
+    "controllers": ["ContentType", "Content"],
+    "allowDB": true,
+    "serviceLogName": "auth",
+    "publishingTopics": [
+    ],
+    "subscribedTopics": {
+        "vidmicro.language.created":"HandleLanguageCreated",
+        "vidmicro.language.updated":"HandleLanguageUpdated",
+        "vidmicro.language.deleted":"HandleLanguageDeleted",
+        "vidmicro.title.created":"HandleTitleCreated",
+        "vidmicro.title.updated":"HandleTitleUpdated",
+        "vidmicro.title.deleted":"HandleTitleDeleted",
+        "vidmicro.title.language.deleted": "HandleTitleLanguageDeleted",
+        "vidmicro.title.language.added": "HandleTitleLanguageDeleted"
+    },
+    "apis": {
+        "/api/content_type":["GET", "PUT", "POST", "DELETE"],
+        "/api/content":["GET", "PUT", "POST", "DELETE"]
+    },
+    "sessionSecret": "*mongonormalcontrollers.SessionController",
+    "tokenExpiry": 5000,
+    "acl": {
+        "user": {
+            "/api/content_type":["GET"],
+            "/api/content":["GET"]
+        },
+        "admin": {
+            "/api/content_type":["GET", "PUT", "POST", "DELETE"],
+            "/api/content":["GET", "PUT", "POST", "DELETE"]
+        },
+        "manager": {
+            "/api/content_type":["GET"],
+            "/api/content":["GET"]
+        }
+    },
+    "languagePostfix": "_content_languages",
+    "contentTypePostfix": "_content_type_postfix",
+    "contentTitleLanguagesPostfix": "_content_title_languages",
+    "titlesLanguageExpirationTime": 600000
+}

@@ -11,6 +11,7 @@ import (
 
 	"com.code.vidmicro/com.code.vidmicro/httpHandler"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers"
+	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/serviceutils"
 )
 
@@ -30,7 +31,7 @@ func (u *AuthService) Run() error {
 func (u *AuthService) RunServer() {
 
 	srv := &http.Server{
-		Addr:    ":8080",
+		Addr:    configmanager.GetInstance().Address,
 		Handler: httpHandler.GetInstance().GetEngine(),
 	}
 	basecontrollers.GetInstance().RegisterControllers()

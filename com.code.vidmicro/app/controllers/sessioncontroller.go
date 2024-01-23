@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"log"
 	"net/http"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
@@ -11,6 +10,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/baserouter"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basevalidators"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/responses"
+	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
 	"github.com/gin-gonic/gin"
@@ -31,6 +31,7 @@ func (u SessionController) GetCollectionName() basetypes.CollectionName {
 }
 
 func (u SessionController) DoIndexing() error {
+	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.Session{})
 	return nil
 }
 
@@ -40,7 +41,6 @@ func (u *SessionController) SetBaseFunctions(inter basefunctions.BaseFucntionsIn
 
 func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		sessionId, err := utils.GenerateUUID()
 		modelSession := models.Session{
 			SessionId: sessionId,
@@ -51,20 +51,15 @@ func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 			return
 		}
 
-		//ignoring err because library said it will always give a response
-		// session, err := sessionshandler.GetInstance().GetSession().Get(r, sessionId)
-		// session.Values["sessionId"] = sessionId
-
-		//TODO: handle creating and saving session
-		log.Println(modelSession)
+		cache.GetInstance().Set(sessionId, modelSession.EncodeRedisData())
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_SESSION_FAILED, err, nil))
 			return
 		}
-		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_SESSION_SUCCESS, err, nil))
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_SESSION_SUCCESS, err, modelSession))
 	}
 }
 
 func (u SessionController) RegisterApis() {
-	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/createSession", u.handleCreateSession())
+	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/createSession", u.handleCreateSession())
 }

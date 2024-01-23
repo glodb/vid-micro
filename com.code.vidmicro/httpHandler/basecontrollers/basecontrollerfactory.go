@@ -7,6 +7,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/app/validators"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
+	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseconst"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseinterfaces"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 )
@@ -54,12 +55,34 @@ func (c *controllersObject) RegisterControllers() {
 
 func (c *controllersObject) registerControllers(key string, registerApis bool) {
 	switch key {
-	case User:
+	case baseconst.User:
 		c.controllers[key] = &controllers.UserController{BaseControllerFactory: c, ValidatorInterface: &validators.UserValidator{}}
-	case Session:
+	case baseconst.Session:
 		c.controllers[key] = &controllers.SessionController{BaseControllerFactory: c, ValidatorInterface: &validators.SessionValidator{}}
+	case baseconst.Roles:
+		c.controllers[key] = &controllers.RolesController{BaseControllerFactory: c, ValidatorInterface: &validators.RolesValidator{}}
+	case baseconst.Genres:
+		c.controllers[key] = &controllers.GenresController{BaseControllerFactory: c, ValidatorInterface: &validators.GenresValidator{}}
+	case baseconst.Status:
+		c.controllers[key] = &controllers.StatusController{BaseControllerFactory: c, ValidatorInterface: &validators.StatusValidator{}}
+	case baseconst.Language:
+		c.controllers[key] = &controllers.LanguageController{BaseControllerFactory: c, ValidatorInterface: &validators.LanguageValidator{}}
+	case baseconst.TitleType:
+		c.controllers[key] = &controllers.TitleTypeController{BaseControllerFactory: c, ValidatorInterface: &validators.TitleTypeValidator{}}
+	case baseconst.Titles:
+		c.controllers[key] = &controllers.TitlesController{BaseControllerFactory: c, ValidatorInterface: &validators.TitlesValidator{}}
+	case baseconst.LanguageMeta:
+		c.controllers[key] = &controllers.LanguageMetadataController{BaseControllerFactory: c, ValidatorInterface: &validators.LanguageMetadataValidator{}}
+	case baseconst.LanguageContent:
+		c.controllers[key] = &controllers.LanguageContentController{BaseControllerFactory: c, ValidatorInterface: &validators.LanguageValidator{}}
+	case baseconst.TitlesSummary:
+		c.controllers[key] = &controllers.TitlesSummaryController{BaseControllerFactory: c, ValidatorInterface: &validators.TitlesSummaryValidator{}}
+	case baseconst.ContentType:
+		c.controllers[key] = &controllers.ContentTypeController{BaseControllerFactory: c, ValidatorInterface: &validators.ContentTypeValidator{}}
+	case baseconst.Content:
+		c.controllers[key] = &controllers.ContentController{BaseControllerFactory: c, ValidatorInterface: &validators.ContentValidator{}}
 	}
-	funcs, _ := basefunctions.GetInstance().GetFunctions(basetypes.MYSQL, c.controllers[key].GetDBName())
+	funcs, _ := basefunctions.GetInstance().GetFunctions(basetypes.PSQL, c.controllers[key].GetDBName())
 	c.controllers[key].SetBaseFunctions(*funcs)
 	c.controllers[key].DoIndexing()
 	if registerApis {

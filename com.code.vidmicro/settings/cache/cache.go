@@ -88,6 +88,25 @@ func (cache *RedisCache) Set(key string, value []byte) error {
 	return err
 }
 
+func (cache *RedisCache) SetEx(key string, value []byte, expiryTime int) error {
+	cache.semaphore.Acquire(context.TODO(), 1)
+	c := cache.pool.Get()
+	defer cache.semaphore.Release(1)
+	defer c.Close()
+	_, err := c.Do("SETEX", key, expiryTime, value)
+	if err != nil {
+
+		if configmanager.GetInstance().Redis.PrintRedis {
+			log.Println("RError: ("+configmanager.GetInstance().ServiceLogName+"), {Set} key:", key, " error:", err)
+		}
+		v := string(value)
+		if len(v) > 15 {
+			v = v[0:12] + "..."
+		}
+	}
+	return err
+}
+
 func (cache *RedisCache) GetInt(key string) (int64, error) {
 	if err := cache.semaphore.Acquire(context.TODO(), 1); err != nil {
 		if configmanager.GetInstance().Redis.PrintRedis {
@@ -252,6 +271,20 @@ func (cache *RedisCache) Del(key string) error {
 	return err
 }
 
+func (cache *RedisCache) DelMany(keys []string) error {
+	cache.semaphore.Acquire(context.TODO(), 1)
+	c := cache.pool.Get()
+	defer cache.semaphore.Release(1)
+	defer c.Close()
+	_, err := c.Do("DEL", redis.Args{}.AddFlat(keys)...)
+	if err != nil {
+		if configmanager.GetInstance().Redis.PrintRedis {
+			log.Println("RError: ("+configmanager.GetInstance().ServiceLogName+"), {Del} key:", keys, " err:", err)
+		}
+	}
+	return err
+}
+
 func (cache *RedisCache) Append(key string, value interface{}) error {
 	cache.semaphore.Acquire(context.TODO(), 1)
 	c := cache.pool.Get()
@@ -283,7 +316,7 @@ func (cache *RedisCache) SAdd(value []interface{}) error {
 	return err
 }
 
-func (cache *RedisCache) ReadSet(key string) []string {
+func (cache *RedisCache) SMembers(key string) []string {
 	if err := cache.semaphore.Acquire(context.TODO(), 1); err != nil {
 
 		return nil
@@ -316,10 +349,10 @@ func (cache *RedisCache) SRem(value []interface{}) error {
 	return err
 }
 
-func (cache *RedisCache) SetISMember(key string, member string) (bool, error) {
+func (cache *RedisCache) SetISMember(key string, member string) bool {
 	if err := cache.semaphore.Acquire(context.TODO(), 1); err != nil {
 
-		return false, nil
+		return false
 	}
 	c := cache.pool.Get()
 	defer cache.semaphore.Release(1)
@@ -329,9 +362,27 @@ func (cache *RedisCache) SetISMember(key string, member string) (bool, error) {
 		if configmanager.GetInstance().Redis.PrintRedis {
 			log.Println("RError: ("+configmanager.GetInstance().ServiceLogName+"), {SetISMember} key:", key, "member:", member, " err:", err)
 		}
-		return false, nil
+		return false
 	}
-	return val, err
+	return val
+}
+
+func (cache *RedisCache) Expire(key string, expirationTime int) error {
+	if err := cache.semaphore.Acquire(context.TODO(), 1); err != nil {
+
+		return err
+	}
+	c := cache.pool.Get()
+	defer cache.semaphore.Release(1)
+	defer c.Close()
+	_, err := redis.Bool(c.Do("EXPIRE", key, expirationTime))
+	if err != nil {
+		if configmanager.GetInstance().Redis.PrintRedis {
+			log.Println("RError: ("+configmanager.GetInstance().ServiceLogName+"), {Expire} key:", key, " err:", err)
+		}
+		return err
+	}
+	return nil
 }
 
 func (cache *RedisCache) SortedSetAdd(key string, seq int32, value interface{}) error {
@@ -706,7 +757,7 @@ func (cache *RedisCache) Exists(key string) bool {
 	defer c.Close()
 	data, err := redis.Bool(c.Do("EXISTS", key))
 	if err != nil {
-
+		return false
 	}
 	return data
 }

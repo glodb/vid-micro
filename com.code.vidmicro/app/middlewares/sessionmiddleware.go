@@ -21,6 +21,10 @@ func (u *SessionMiddleware) GetHandlerFunc() gin.HandlerFunc {
 		} else {
 			var session models.Session
 			session.DecodeRedisData(data)
+			if session.BlackListed {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.SESSION_NOT_FOUND, err, nil))
+				return
+			}
 			c.Set("session", session)
 			c.Set("session-id", session.SessionId)
 			session.LastActivity = time.Now().Unix()

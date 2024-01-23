@@ -1,0 +1,25 @@
+{
+  "initClassName": "AUTHSERVICE",
+  "natsServer":"nats://127.0.0.1:4222",
+  "allowDB": true,
+  "serviceMicroName": "webserver-uat.fifo",
+  "publishingTopics": [
+    "init-settings-uat.fifo",
+    "send-otp-uat.fifo"
+  ],
+  "processInitSettingsTopic": "init-settings-uat.fifo",
+  "processSendOTPTopic": "send-otp-uat.fifo",
+  "sslModePostgre": "",
+  "standardOutput": true,
+  "dbPoolSizePostgre": 50,
+  "dbMaxConnAgePostgre": 10,
+  "dbMinIdleConnsPostgre": 10,
+  "dbIdleTimeoutPostgre": 5,
+  "dbPoolTimeoutPostgre": 30,
+  "dbChunkTimeIntervalPostgre": "5000",
+  "geofenceServiceName": "geofenceservice-uat",
+  "totalPostfix": "-total",
+  "defaultRoleID": 3,
+  "defaultCompanyRoleID": 1,
+  "limit": 10
+}
