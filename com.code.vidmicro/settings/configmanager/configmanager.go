@@ -48,6 +48,8 @@ type config struct {
 	TitlesLanguageExpirationTime int                            `json:"titlesLanguageExpirationTime"`
 	ContentPostFix               string                         `json:"contentPostfix"`
 	SessionExpirySeconds         int64                          `json:"sessionExpirySeconds"`
+	EmailConfig                  configModels.EmailConfig       `json:"emailConfig"`
+	EmailVerificationTokenExpiry int64                          `json:"emailVerificationTokenExpiry"`
 	Acl                          map[string]map[string]*utils.Set
 	Apis                         map[string]*utils.Set
 }
@@ -127,7 +129,7 @@ func (c *config) Setup() {
 // GetConfigNameAndPath get the config name on the basis of flag
 func (c *config) getConfigNameAndPath() (string, string, string) {
 	serverType := flag.String("env", "DEV", "use development server by default")
-	configPath := flag.String("con", "CONTENTSERVICE", "use Uploader server by default")
+	configPath := flag.String("con", "AUTHSERVICE", "use Uploader server by default")
 
 	var conName string
 	var conPath string

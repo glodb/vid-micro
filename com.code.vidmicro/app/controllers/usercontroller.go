@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/responses"
 	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
+	"com.code.vidmicro/com.code.vidmicro/settings/emails"
 	"com.code.vidmicro/com.code.vidmicro/settings/s3uploader"
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
 	"github.com/gin-gonic/gin"
@@ -91,6 +93,13 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 			return
 		}
 
+		verificationToken, err := u.generateJWT(configmanager.GetInstance().EmailVerificationTokenExpiry)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GENERATE_EMAIL_VERIFICATION_TOKEN_FAILED, err, nil))
+			return
+		}
+		cache.GetInstance().Set(verificationToken, []byte(verificationToken))
+
 		modelUser.Salt, err = utils.GenerateSalt()
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
@@ -100,6 +109,7 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 		modelUser.CreatedAt = time.Now()
 		modelUser.UpdatedAt = time.Now()
 		modelUser.Password = utils.HashPassword(modelUser.Password, modelUser.Salt)
+		modelUser.VerificationToken = verificationToken
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_HASH_FAILED, err, nil))
@@ -111,7 +121,77 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_HASH_FAILED, err, nil))
 			return
 		}
+
+		verificationURL := fmt.Sprintf("http://localhost:8080/api/verifyEmail/%s", verificationToken)
+		emailBody := fmt.Sprintf("Hi %s! Please verify your email address by clicking the following address: %s", modelUser.Username, verificationURL)
+
+		err = emails.GetInstance().SendVerificationEmail(modelUser.Email, "Vidmicro Email Verification", emailBody)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.SEND_VERIFICATION_EMAIL_FAILED, err, nil))
+			return
+		}
+
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.REGISTER_USER_SUCCESS, err, nil))
+	}
+}
+
+func (u *UserController) handleVerifyEmail() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		emailVerificationToken := c.Param("token")
+		if emailVerificationToken == "" {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_EMAIL_OR_TOKEN, nil, nil))
+			return
+		}
+
+		// Parse the JWT token to check for expiration
+		claims := jwt.MapClaims{}
+		parsedToken, err := jwt.ParseWithClaims(emailVerificationToken, claims, func(token *jwt.Token) (interface{}, error) {
+			// Provide the key or secret used to sign the token
+			return []byte(configmanager.GetInstance().SessionSecret), nil
+		})
+
+		// Check for errors during token parsing
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_EMAIL_OR_TOKEN, err, nil))
+			return
+		}
+
+		// Check if the token is valid
+		if parsedToken.Valid {
+			// Check for expiration
+			expirationDuration := time.Duration(configmanager.GetInstance().EmailVerificationTokenExpiry) * time.Second
+			expirationTime := time.Now().Add(expirationDuration)
+			if time.Now().After(expirationTime) {
+				// Token has expired
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_EXPIRED, nil, nil))
+				return
+			}
+
+			// Token is valid and not expired, continue with verification logic
+
+			// Check if the token is stored in the cache
+			storedToken, err := cache.GetInstance().Get(emailVerificationToken)
+			if err != nil || string(storedToken) != emailVerificationToken {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_EMAIL_OR_TOKEN, nil, nil))
+				return
+			}
+
+			// If the tokens match, update the user's isVerified flag in the database
+			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET is_verified = true WHERE verification_token = $1", []interface{}{emailVerificationToken}, false)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.EMAIL_VERIFICATION_FAILED, err, nil))
+				return
+			}
+
+			// Remove the verification token from the cache
+			cache.GetInstance().Del(emailVerificationToken)
+
+			// Respond with success message
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.EMAIL_VERIFICATION_SUCCESS, nil, nil))
+		} else {
+			// Token is invalid
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_EMAIL_OR_TOKEN, nil, nil))
+		}
 	}
 }
 
@@ -395,4 +475,5 @@ func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetLoginRouter().GET("/api/getUser", u.handleGetUser())
 	baserouter.GetInstance().GetLoginRouter().POST("/api/blackListUser", u.handleBlackListUser())
 	baserouter.GetInstance().GetLoginRouter().POST("/api/editUser", u.handleEditUser())
+	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/verifyEmail/:token", u.handleVerifyEmail())
 }

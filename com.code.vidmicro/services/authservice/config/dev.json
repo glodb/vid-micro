@@ -12,6 +12,16 @@
     ],
     "subscribedTopics": {
     },
+    "emailConfig": {
+        "smtpServer": "smtp.gmail.com",
+        "port": 587,
+        "username": "haseebshalan@gmail.com",
+        "password": "dwkufltzytlmrlbu",
+        "fromAddress": "haseebshalan@gmail.com",
+        "fromName": "Aafaq",
+        "isTLS": true
+    },
+    "emailVerificationTokenExpiry" : 360,
     "apis": {
         "/api/createSession":["GET"],
         "/api/signup":["POST"],
@@ -19,7 +29,8 @@
         "/api/refreshToken":["POST"],
         "/api/getUser":["GET"],
         "/api/blackListUser":["POST"],
-        "/api/editUser": ["POST"]
+        "/api/editUser": ["POST"],
+        "/api/verifyEmail": ["GET"]
     },
     "sessionSecret": "*mongonormalcontrollers.SessionController",
     "tokenExpiry": 5000,
