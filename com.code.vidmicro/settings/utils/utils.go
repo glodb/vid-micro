@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"com.code.vidmicro/com.code.vidmicro/settings/utilsdatatypes"
 )
 
 const saltLength = 16
@@ -167,7 +169,7 @@ func GetDistance(lat1 float64, lon1 float64, lat2 float64, lon2 float64) float64
 	//return 12742 * math.Asin((math.Sqrt(a))); // 2  R; R = 6371 km
 }
 
-func CopyMap(m map[string]*Queue) map[string][]interface{} {
+func CopyMap(m map[string]*utilsdatatypes.Queue) map[string][]interface{} {
 	cp := make(map[string][]interface{})
 	for k, v := range m {
 		cp[k] = v.Copy()

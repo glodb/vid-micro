@@ -10,6 +10,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/topics"
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
+	"com.code.vidmicro/com.code.vidmicro/settings/utilsdatatypes"
 	"github.com/bytedance/sonic"
 	"github.com/rs/xid"
 )
@@ -23,13 +24,13 @@ type EventPublisher struct {
 	ticker        *time.Ticker
 	eventMutex    sync.Mutex
 	failedMutex   sync.Mutex
-	channelsQueue map[string]*utils.Queue
-	failedQueue   utils.Queue
+	channelsQueue map[string]*utilsdatatypes.Queue
+	failedQueue   utilsdatatypes.Queue
 }
 
 func (ts *EventPublisher) New() {
 	ts.failedQueue.New()
-	ts.channelsQueue = make(map[string]*utils.Queue)
+	ts.channelsQueue = make(map[string]*utilsdatatypes.Queue)
 	ts.startTimer()
 }
 
@@ -102,7 +103,7 @@ func (ts *EventPublisher) sendEvents() {
 
 	ts.eventMutex.Lock()
 	newMap := utils.CopyMap(ts.channelsQueue)
-	ts.channelsQueue = make(map[string]*utils.Queue)
+	ts.channelsQueue = make(map[string]*utilsdatatypes.Queue)
 	ts.eventMutex.Unlock()
 
 	for key, element := range newMap {
@@ -120,7 +121,7 @@ func (ts *EventPublisher) publishEvent(data interface{}, serviceName string, top
 		_, ok := ts.channelsQueue[key]
 
 		if !ok {
-			ts.channelsQueue[key] = &utils.Queue{}
+			ts.channelsQueue[key] = &utilsdatatypes.Queue{}
 			ts.channelsQueue[key].New()
 			ts.channelsQueue[key].Enqueue(data)
 		} else {

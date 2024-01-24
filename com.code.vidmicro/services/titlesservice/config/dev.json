@@ -60,5 +60,10 @@
     "statusPostfix": "_titles_status",
     "languageMetadataPostfix": "_titles_languages_metadata_postfix",
     "languageMetaExpiryTime":600000,
-    "titleExpiryTime": 600000
+    "titleExpiryTime": 600000,
+    "meilisearch": {
+        "host":"http://localhost:7700",
+        "apikey":""
+    },
+    "meiliSearchIndex":"titles_X2cgtdvr"
 }

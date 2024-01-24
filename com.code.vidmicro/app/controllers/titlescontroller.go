@@ -365,6 +365,9 @@ func (u *TitlesController) handleDeleteTitles() gin.HandlerFunc {
 			return
 		}
 
+		languageMetaController, _ := u.BaseControllerFactory.GetController(baseconst.LanguageMeta)
+		languageMetaController.DeleteOne(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), map[string]interface{}{"titles_id": modelTitles.Id}, false, false)
+
 		pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesPostfix
 
 		keys := cache.GetInstance().GetKeys(pattern)
@@ -434,7 +437,7 @@ func (u *TitlesController) handleAddTitleLanguages() gin.HandlerFunc {
 			return
 		}
 
-		titleCount, err := languageMetaController.Count(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), map[string]interface{}{"id": modelLanguagesMeta.TitlesId})
+		titleCount, err := u.Count(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelLanguagesMeta.TitlesId})
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
 			return
@@ -445,6 +448,15 @@ func (u *TitlesController) handleAddTitleLanguages() gin.HandlerFunc {
 		}
 
 		languageMetaController.Add(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), modelLanguagesMeta, false)
+
+		updateQuery := "UPDATE " + string(u.GetCollectionName()) + " SET languages_meta = languages_meta || ARRAY[$1] WHERE id = $2"
+		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), updateQuery, []interface{}{modelLanguagesMeta.Id, modelLanguagesMeta.TitlesId}, false)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
 		serviceutils.GetInstance().PublishEvent(modelLanguagesMeta, configmanager.GetInstance().ClassName, "vidmicro.title.language.added")
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, nil, nil))
 	}
@@ -452,6 +464,63 @@ func (u *TitlesController) handleAddTitleLanguages() gin.HandlerFunc {
 
 func (u *TitlesController) handleDeleteLanguages() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		modelLanguagesMeta := models.LanguageMeta{}
+		if err := c.ShouldBind(&modelLanguagesMeta); err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		if modelLanguagesMeta.LanguageId <= 0 {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("language id is required"), nil))
+			return
+		}
+
+		if modelLanguagesMeta.TitlesId <= 0 {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("title id is required"), nil))
+			return
+		}
+
+		languageMetaController, _ := u.BaseControllerFactory.GetController(baseconst.LanguageMeta)
+		rows, err := languageMetaController.Find(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), "", map[string]interface{}{"language_id": modelLanguagesMeta.LanguageId, "titles_id": modelLanguagesMeta.TitlesId}, models.LanguageMeta{}, false, "", false)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		defer rows.Close()
+
+		for rows.Next() {
+			// Scan the row's values into the User struct.
+			err := rows.Scan(&modelLanguagesMeta.Id, &modelLanguagesMeta.TitlesId, &modelLanguagesMeta.LanguageId, &modelLanguagesMeta.StatusId)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+				return
+			}
+
+		}
+
+		if modelLanguagesMeta.Id == "" {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("id doesn't exist"), nil))
+			return
+		}
+
+		updateQuery := "UPDATE " + u.GetCollectionName() + " SET languages_meta = array_remove(languages_meta, $1) WHERE id = $2"
+		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), string(updateQuery), []interface{}{modelLanguagesMeta.Id, modelLanguagesMeta.TitlesId}, false)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("updating title failed"), nil))
+			return
+		}
+
+		err = languageMetaController.DeleteOne(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), map[string]interface{}{"id": modelLanguagesMeta.Id}, false, false)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("deleting language metadata failed"), nil))
+			return
+		}
+
+		serviceutils.GetInstance().PublishEvent(modelLanguagesMeta, configmanager.GetInstance().ClassName, "vidmicro.title.language.deleted")
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_SUCCESS, nil, nil))
 	}
 }
 func (u TitlesController) RegisterApis() {

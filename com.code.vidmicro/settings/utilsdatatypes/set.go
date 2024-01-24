@@ -1,4 +1,4 @@
-package utils
+package utilsdatatypes
 
 type Set struct {
 	data map[string]bool

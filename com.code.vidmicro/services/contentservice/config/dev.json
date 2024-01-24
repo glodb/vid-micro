@@ -4,7 +4,7 @@
     },
     "microServiceName": "contentService",
     "address": "localhost:8082",
-    "controllers": ["ContentType", "Content"],
+    "controllers": ["ContentType", "Content", "TitlesSummary"],
     "allowDB": true,
     "serviceLogName": "auth",
     "publishingTopics": [
@@ -17,31 +17,38 @@
         "vidmicro.title.updated":"HandleTitleUpdated",
         "vidmicro.title.deleted":"HandleTitleDeleted",
         "vidmicro.title.language.deleted": "HandleTitleLanguageDeleted",
-        "vidmicro.title.language.added": "HandleTitleLanguageDeleted"
+        "vidmicro.title.language.added": "HandleTitleLanguageAdded"
     },
     "apis": {
         "/api/content_type":["GET", "PUT", "POST", "DELETE"],
-        "/api/content":["GET", "PUT", "POST", "DELETE"]
+        "/api/content":["GET", "PUT", "POST", "DELETE"],
+        "/api/titles_summary" : ["GET"]
     },
     "sessionSecret": "*mongonormalcontrollers.SessionController",
     "tokenExpiry": 5000,
     "acl": {
         "user": {
             "/api/content_type":["GET"],
-            "/api/content":["GET"]
+            "/api/content":["GET"],
+            "/api/titles_summary" : ["GET"]
         },
         "admin": {
             "/api/content_type":["GET", "PUT", "POST", "DELETE"],
-            "/api/content":["GET", "PUT", "POST", "DELETE"]
+            "/api/content":["GET", "PUT", "POST", "DELETE"],
+            "/api/titles_summary" : ["GET"]
         },
         "manager": {
             "/api/content_type":["GET"],
-            "/api/content":["GET"]
+            "/api/content":["GET"],
+            "/api/titles_summary" : ["GET"]
         }
     },
     "languagePostfix": "_content_languages",
     "contentTypePostfix": "_content_type_postfix",
     "contentTitleLanguagesPostfix": "_content_title_languages",
     "contentPostfix": "_content_service_main_contents_postfix",
-    "titlesLanguageExpirationTime": 600000
+    "titlesContentPostfix": "_titles_summary_content_postfix",
+    "singleTitlePostfix": "single_",
+    "titlesLanguageExpirationTime": 600000,
+    "titleExpiryTime": 600000
 }

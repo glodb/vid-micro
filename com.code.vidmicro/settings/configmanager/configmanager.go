@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	configModels "com.code.vidmicro/com.code.vidmicro/settings/configmanager/cofingModels"
-	"com.code.vidmicro/com.code.vidmicro/settings/utils"
+	"com.code.vidmicro/com.code.vidmicro/settings/utilsdatatypes"
 	"github.com/bytedance/sonic"
 )
 
@@ -53,8 +53,11 @@ type config struct {
 	EmailVerificationURL         string                         `json:"emailVerificationURL"`
 	EmailBody                    string                         `json:"emailBody"`
 	EmailSubject                 string                         `json:"emailSubject"`
-	Acl                          map[string]map[string]*utils.Set
-	Apis                         map[string]*utils.Set
+	TitlesContentPostfix         string                         `json:"titlesContentPostfix"`
+	Meilisearch                  configModels.MeilisearchConfig `json:"meilisearch"`
+	MeilisearchIndex             string                         `json:"meiliSearchIndex"`
+	Acl                          map[string]map[string]*utilsdatatypes.Set
+	Apis                         map[string]*utilsdatatypes.Set
 }
 
 var (
@@ -106,10 +109,10 @@ func (c *config) Setup() {
 
 	c.ClassName = serviceName
 
-	instance.Acl = make(map[string]map[string]*utils.Set)
+	instance.Acl = make(map[string]map[string]*utilsdatatypes.Set)
 	for k, v := range instance.MapAcl {
-		rawSet := utils.NewSet()
-		instance.Acl[k] = make(map[string]*utils.Set)
+		rawSet := utilsdatatypes.NewSet()
+		instance.Acl[k] = make(map[string]*utilsdatatypes.Set)
 		for innerK, innerV := range v {
 			for _, val := range innerV {
 				rawSet.Add(val)
@@ -118,10 +121,10 @@ func (c *config) Setup() {
 		}
 	}
 
-	instance.Apis = make(map[string]*utils.Set)
+	instance.Apis = make(map[string]*utilsdatatypes.Set)
 
 	for k, v := range instance.MapApis {
-		rawSet := utils.NewSet()
+		rawSet := utilsdatatypes.NewSet()
 		for _, val := range v {
 			rawSet.Add(val)
 		}
