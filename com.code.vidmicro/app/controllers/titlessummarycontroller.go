@@ -1,11 +1,14 @@
 package controllers
 
 import (
+	"fmt"
+
 	"com.code.vidmicro/com.code.vidmicro/app/models"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseinterfaces"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basevalidators"
+	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 )
 
@@ -30,6 +33,10 @@ func (u TitlesSummaryController) DoIndexing() error {
 
 func (u *TitlesSummaryController) SetBaseFunctions(inter basefunctions.BaseFucntionsInterface) {
 	u.BaseFucntionsInterface = inter
+}
+
+func (u *TitlesSummaryController) UpdateTitleLanguage(languageMeta models.LanguageMeta) {
+	cache.GetInstance().SAdd([]interface{}{fmt.Sprintf("%d%s%s", languageMeta.TitlesId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTitleLanguagesPostfix), fmt.Sprintf("%d", languageMeta.LanguageId)})
 }
 
 func (u TitlesSummaryController) RegisterApis() {

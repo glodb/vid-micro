@@ -23,7 +23,7 @@ func (u *TitlesValidator) Validate(apiName string, data interface{}) error {
 		fallthrough
 	case "/api/titles/post":
 		if titles.Id <= 0 {
-			return errors.New("genre id is required")
+			return errors.New("title id is required")
 		}
 	}
 	return nil

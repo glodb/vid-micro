@@ -32,7 +32,7 @@ func (u ContentTypeController) GetCollectionName() basetypes.CollectionName {
 }
 
 func (u ContentTypeController) DoIndexing() error {
-	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.ContentType{})
+	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.Contents{})
 
 	keys := cache.GetInstance().GetKeys("*" + configmanager.GetInstance().ContentTypePostfix)
 	cache.GetInstance().DelMany(keys)
@@ -81,7 +81,7 @@ func (u *ContentTypeController) handleCreateContentType() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_FAILED, err, nil))
 			return
 		}
-		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelContent.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix), modelContent.EncodeRedisData())
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelContent.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix), modelContent.EncodeRedisData())
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelContent))
 	}
 }

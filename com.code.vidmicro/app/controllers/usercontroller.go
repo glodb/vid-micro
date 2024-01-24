@@ -28,9 +28,9 @@ type UserController struct {
 	basevalidators.ValidatorInterface
 }
 
-func (u *UserController) generateJWT(user models.User) (string, error) {
+func (u *UserController) generateJWT(minutes int64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"exp": time.Now().Add(time.Minute * time.Duration(configmanager.GetInstance().TokenExpiry)).Unix(), // Set expiration time to 1 hour from now
+		"exp": time.Now().Add(time.Minute * time.Duration(minutes)).Unix(), // Set expiration time to 1 hour from now
 	})
 
 	// Sign the token with the secret key
@@ -166,7 +166,7 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 			password := utils.HashPassword(modelUser.Password, user.Salt)
 
 			if password == user.Password {
-				jwtToken, err := u.generateJWT(models.User{})
+				jwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
 
 				if err != nil {
 					c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
@@ -231,7 +231,7 @@ func (u *UserController) handleRefreshToken() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_REFRESH_TOKEN, nil, nil))
 			return
 		}
-		newJwtToken, err := u.generateJWT(models.User{})
+		newJwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_CREATING_JWT, nil, nil))
 			return

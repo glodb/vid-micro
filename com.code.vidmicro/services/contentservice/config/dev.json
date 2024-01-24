@@ -42,5 +42,6 @@
     "languagePostfix": "_content_languages",
     "contentTypePostfix": "_content_type_postfix",
     "contentTitleLanguagesPostfix": "_content_title_languages",
+    "contentPostfix": "_content_service_main_contents_postfix",
     "titlesLanguageExpirationTime": 600000
 }

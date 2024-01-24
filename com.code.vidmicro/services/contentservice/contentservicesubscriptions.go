@@ -82,9 +82,10 @@ func (ts ContentServiceSubscriptions) HandleLanguageDeleted(msg *nats.Msg) {
 		controller, _ := basecontrollers.GetInstance().GetController(baseconst.LanguageContent)
 		languageController := controller.(*controllers.LanguageContentController)
 		languageController.DeleteLanguage(langData)
-		// Delete all content with this language
-		// Delete all content paginations
-		// Delete all filters in redis
+
+		keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%s", configmanager.GetInstance().ContentPostFix))
+		cache.GetInstance().DelMany(keys)
+
 		cache.GetInstance().Del(fmt.Sprintf("%d%s%s", langData.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix))
 	}
 }
@@ -112,10 +113,10 @@ func (ts ContentServiceSubscriptions) HandleTitleUpdated(msg *nats.Msg) {
 	for _, s := range data {
 		converted := s.(map[string]interface{})
 		log.Println("HandleTitleUpdated:", converted)
-		// langData := models.Language{Id: converted["id"].(string), Name: converted["name"].(string), Code: converted["code"].(string)}
-		// controller, _ := basecontrollers.GetInstance().GetController(baseconst.Language)
-		// languageController := controller.(*controllers.LanguageController)
-		// languageController.DeleteLanguage(langData)
+		titleData := models.TitlesSummary{Id: int(converted["Id"].(float64)), OriginalTitle: converted["original_title"].(string)}
+		controller, _ := basecontrollers.GetInstance().GetController(baseconst.TitlesSummary)
+		query := "UPDATE " + string(controller.GetCollectionName()) + " SET original_title=$1 where id=$2"
+		controller.UpdateOne(controller.GetDBName(), controller.GetCollectionName(), string(query), []interface{}{titleData.OriginalTitle, titleData.Id}, false)
 	}
 }
 
@@ -127,10 +128,18 @@ func (ts ContentServiceSubscriptions) HandleTitleDeleted(msg *nats.Msg) {
 	for _, s := range data {
 		converted := s.(map[string]interface{})
 		log.Println("HandleTitleDeleted:", converted)
-		// langData := models.Language{Id: converted["id"].(string), Name: converted["name"].(string), Code: converted["code"].(string)}
-		// controller, _ := basecontrollers.GetInstance().GetController(baseconst.Language)
-		// languageController := controller.(*controllers.LanguageController)
-		// languageController.DeleteLanguage(langData)
+
+		titleData := models.TitlesSummary{Id: int(converted["Id"].(float64)), OriginalTitle: converted["original_title"].(string)}
+		controller, _ := basecontrollers.GetInstance().GetController(baseconst.TitlesSummary)
+		condition := map[string]interface{}{"id": titleData.Id}
+		controller.DeleteOne(controller.GetDBName(), controller.GetCollectionName(), condition, false, false)
+
+		contentController, _ := basecontrollers.GetInstance().GetController(baseconst.Content)
+		condition = map[string]interface{}{"associated_title": titleData.Id}
+		contentController.DeleteOne(contentController.GetDBName(), contentController.GetCollectionName(), condition, false, false)
+
+		keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%s%s", configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentPostFix))
+		cache.GetInstance().DelMany(keys)
 	}
 }
 
@@ -156,7 +165,11 @@ func (ts ContentServiceSubscriptions) HandleTitleLanguageAdded(msg *nats.Msg) {
 	}
 	for _, s := range data {
 		converted := s.(map[string]interface{})
-		log.Println("HandleTitleLanguageDeleted:", converted)
+		log.Println("HandleTitleLanguageAdded:", converted)
+		// langData := models.LanguageMeta{LanguageId: int(converted["language_id"].(float64)), TitlesId: int(converted["titles_id"].(float64))}
+		// controller, _ := basecontrollers.GetInstance().GetController(baseconst.Content)
+		// titlesSummary := controller.(*controllers.TitlesSummaryController)
+
 		// langData := models.Language{Id: converted["id"].(string), Name: converted["name"].(string), Code: converted["code"].(string)}
 		// controller, _ := basecontrollers.GetInstance().GetController(baseconst.Language)
 		// languageController := controller.(*controllers.LanguageController)
