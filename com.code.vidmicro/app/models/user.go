@@ -17,4 +17,5 @@ type User struct {
 	CreatedAt         time.Time `db:"createdAt TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt         time.Time `db:"updatedAt TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP" json:"updatedAt"`
 	DeletedAt         time.Time `db:"deletedAt TIMESTAMPTZ" json:"deletedAt"`
+	PasswordHash      string    `db:"password_hash TEXT"`
 }

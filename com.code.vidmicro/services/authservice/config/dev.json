@@ -33,8 +33,11 @@
         "/api/getUser":["GET"],
         "/api/blackListUser":["POST"],
         "/api/editUser": ["POST"],
-        "/api/verifyEmail": ["GET"]
+        "/api/verifyEmail": ["GET"],
+        "/api/resetPassword": ["POST"],
+        "/api/verifyPasswordHash": ["POST"]
     },
+    "passwordTokenExpiry": 20,
     "sessionSecret": "*mongonormalcontrollers.SessionController",
     "tokenExpiry": 5000,
     "acl": {
@@ -52,5 +55,6 @@
             "/api/editUser":["POST"]
         }
     },
-    "sessionExpirySeconds":6000000
+    "sessionExpirySeconds":6000000,
+    "PasswordTokenExpiry": 20
 }

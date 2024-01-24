@@ -67,6 +67,7 @@ const (
 	INVALID_EMAIL_OR_TOKEN                   = 1052
 	EMAIL_VERIFICATION_FAILED                = 1053
 	EMAIL_VERIFICATION_SUCCESS               = 1054
+	INVALID_PASSWORD_TOKEN                   = 1050
 )
 
 type Responses struct {
@@ -142,6 +143,8 @@ func (u *Responses) InitResponses() {
 	u.responses[INVALID_EMAIL_OR_TOKEN] = "INVALID_EMAIL_OR_TOKEN"
 	u.responses[EMAIL_VERIFICATION_FAILED] = "EMAIL_VERIFICATION_FAILED"
 	u.responses[EMAIL_VERIFICATION_SUCCESS] = "EMAIL_VERIFICATION_SUCCESS"
+	u.responses[INVALID_PASSWORD_TOKEN] = "Invalid password reset token"
+
 }
 
 // GetResponse returns the message for the particular response code

@@ -1,11 +1,14 @@
 package utils
 
 import (
+	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"github.com/golang-jwt/jwt/v5"
 	"io"
 	"math"
 	"net/http"
@@ -226,4 +229,35 @@ func IsMobileDevice(r *http.Request) bool {
 	ok, _ := regexp.Match(userAgetnt, deviceName)
 
 	return ok
+}
+
+func IsTokenValid(tokenString string) (bool, error) {
+
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Provide the key for token validation
+		return []byte(configmanager.GetInstance().SessionSecret), nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+
+	// Check if the token is valid
+	if token.Valid {
+		// Token is valid, check the expiration time
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			expirationTime := time.Unix(int64(claims["exp"].(float64)), 0)
+			currentTime := time.Now()
+
+			if expirationTime.After(currentTime) {
+				return true, nil
+			} else {
+				return false, errors.New("token has expired")
+			}
+		} else {
+			return false, errors.New("error extracting claims")
+		}
+	} else {
+		return false, errors.New("error parsing token")
+	}
 }

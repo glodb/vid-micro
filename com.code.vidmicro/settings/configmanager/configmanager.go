@@ -58,6 +58,7 @@ type config struct {
 	MeilisearchIndex             string                         `json:"meiliSearchIndex"`
 	Acl                          map[string]map[string]*utilsdatatypes.Set
 	Apis                         map[string]*utilsdatatypes.Set
+	PasswordTokenExpiry          int64
 }
 
 var (
@@ -135,7 +136,7 @@ func (c *config) Setup() {
 // GetConfigNameAndPath get the config name on the basis of flag
 func (c *config) getConfigNameAndPath() (string, string, string) {
 	serverType := flag.String("env", "DEV", "use development server by default")
-	configPath := flag.String("con", "AUTHSERVICE", "use Uploader server by default")
+	configPath := flag.String("con", "CONTENTSERVICE", "use Uploader server by default")
 
 	var conName string
 	var conPath string
