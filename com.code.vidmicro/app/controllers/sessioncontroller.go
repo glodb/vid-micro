@@ -52,6 +52,7 @@ func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 		}
 
 		cache.GetInstance().Set(sessionId, modelSession.EncodeRedisData())
+		cache.GetInstance().Expire(sessionId, int(configmanager.GetInstance().SessionExpirySeconds))
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_SESSION_FAILED, err, nil))
 			return

@@ -37,5 +37,6 @@
             "/api/getUser": ["GET"],
             "/api/editUser":["POST"]
         }
-    }
+    },
+    "sessionExpirySeconds":6000000
 }

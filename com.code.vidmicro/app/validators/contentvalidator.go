@@ -26,10 +26,19 @@ func (u *ContentValidator) Validate(apiName string, data interface{}) error {
 			return errors.New("associated title is required")
 		}
 	case "/api/content/delete":
-		fallthrough
+		if contentData.Id <= 0 {
+			return errors.New("content id is required")
+		}
 	case "/api/content/post":
 		if contentData.Id <= 0 {
-			return errors.New("genre id is required")
+			return errors.New("content id is required")
+		}
+		if contentData.AssociatedTitle <= 0 {
+			return errors.New("associated title is required")
+		}
+	case "/api/content/get":
+		if contentData.AssociatedTitle <= 0 {
+			return errors.New("associated title is required to get the data")
 		}
 	}
 	return nil

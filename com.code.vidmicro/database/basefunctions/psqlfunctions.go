@@ -288,6 +288,42 @@ func (u *PSqlFunctions) Paginate(dbName basetypes.DBName, collectionName basetyp
 	return rows, count, err
 }
 
+func (u *PSqlFunctions) Count(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}) (int64, error) {
+	conn := baseconnections.GetInstance().GetConnection(basetypes.PSQL).GetDB(basetypes.PSQL).(*sql.DB)
+	whereClause := ""
+	values := make([]interface{}, 0)
+
+	placeholderCount := 1
+
+	for key, val := range condition {
+		if whereClause != "" {
+			whereClause += " AND "
+		} else {
+			whereClause += " WHERE "
+		}
+		whereClause += key + "= $" + strconv.FormatInt(int64(placeholderCount), 10) + " "
+		placeholderCount++
+		values = append(values, val)
+	}
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", string(collectionName)) + whereClause
+
+	var count int64
+	row, err := conn.Query(countQuery, values...)
+	if err != nil {
+		return -1, err
+	}
+
+	countQueryRows := 0
+	for row.Next() {
+		countQueryRows++
+		err = row.Scan(&count)
+		if err != nil {
+			return -1, err
+		}
+	}
+	return count, nil
+}
+
 func (u *PSqlFunctions) UpdateOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, query string, data []interface{}, upsert bool) error {
 	if !strings.Contains(query, "UPDATE") {
 		return errors.New("format of query seems in correct")

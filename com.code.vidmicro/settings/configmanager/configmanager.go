@@ -46,6 +46,8 @@ type config struct {
 	ContentTypePostfix           string                         `json:"contentTypePostfix"`
 	ContentTitleLanguagesPostfix string                         `json:"contentTitleLanguagesPostfix"`
 	TitlesLanguageExpirationTime int                            `json:"titlesLanguageExpirationTime"`
+	ContentPostFix               string                         `json:"contentPostfix"`
+	SessionExpirySeconds         int64                          `json:"sessionExpirySeconds"`
 	Acl                          map[string]map[string]*utils.Set
 	Apis                         map[string]*utils.Set
 }

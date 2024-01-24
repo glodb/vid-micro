@@ -24,7 +24,9 @@
         "/api/status":["GET", "PUT", "POST", "DELETE"],
         "/api/languages":["GET", "PUT", "POST", "DELETE"],
         "/api/title_type":["GET", "PUT", "POST", "DELETE"],
-        "/api/titles": ["GET", "PUT", "POST", "DELETE"]
+        "/api/titles": ["GET", "PUT", "POST", "DELETE"],
+        "/api/add_title_language":["POST"],
+        "/api/delete_title_language":["POST"]
     },
     "sessionSecret": "spiderman",
     "acl": {
@@ -40,7 +42,9 @@
             "/api/status":["GET", "PUT", "POST", "DELETE"],
             "/api/languages":["GET", "PUT", "POST", "DELETE"],
             "/api/title_type":["GET", "PUT", "POST", "DELETE"],
-            "/api/titles": ["GET", "PUT", "POST", "DELETE"]
+            "/api/titles": ["GET", "PUT", "POST", "DELETE"],
+            "/api/add_title_language":["POST"],
+            "/api/delete_title_language":["POST"]
         },
         "manager": {
             "/api/genres":["GET"],

@@ -251,30 +251,8 @@ func (u *TitlesController) handleGetTitles() gin.HandlerFunc {
 
 func (u *TitlesController) handleUpdateTitles() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// modelTitles := models.Titles{}
-		// if err := c.ShouldBind(&modelTitles); err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
-		// 	return
-		// }
-
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelTitles)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
-		// 	return
-		// }
-
-		// err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1, slug = $2 WHERE id = $3", []interface{}{modelTitles.Name, modelTitles.Slug, modelTitles.Id}, false)
-
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_FAILED, err, nil))
-		// 	return
-		// }
-		// c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
-	}
-}
-
-func (u *TitlesController) handleDeleteTitles() gin.HandlerFunc {
-	return func(c *gin.Context) {
+		setPart := " SET "
+		data := make([]interface{}, 0)
 		modelTitles := models.Titles{}
 		if err := c.ShouldBind(&modelTitles); err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
@@ -287,19 +265,200 @@ func (u *TitlesController) handleDeleteTitles() gin.HandlerFunc {
 			return
 		}
 
+		file, err := c.FormFile("image")
+		updateTitle := false
+
+		if err == nil && file != nil {
+			url, err := s3uploader.GetInstance().UploadToSCW(file)
+			if err == nil {
+				modelTitles.CoverUrl = url
+				setPart += "thumbnail = $1"
+				data = append(data, url)
+
+			} else {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
+				return
+			}
+		}
+
+		if modelTitles.OriginalTitle != "" {
+			lengthString := strconv.FormatInt(int64(len(data)+1), 10)
+			if len(data) > 0 {
+				setPart += ","
+			}
+			setPart += "original_title = $" + lengthString
+			data = append(data, modelTitles.OriginalTitle)
+			updateTitle = true
+		}
+
+		if modelTitles.Year >= 0 {
+			lengthString := strconv.FormatInt(int64(len(data)+1), 10)
+			if len(data) > 0 {
+				setPart += ","
+			}
+			setPart += "year = $" + lengthString
+			data = append(data, modelTitles.Year)
+		}
+
+		if modelTitles.Languages != "" {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("please use addLanguage and removeLanguage api for languages"), nil))
+			return
+		}
+
+		if len(data) > 0 {
+			lengthString := strconv.FormatInt(int64(len(data)+1), 10)
+			setPart += " WHERE id =$" + lengthString
+			data = append(data, modelTitles.Id)
+
+			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+setPart, data, false)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_UPDATING_USER, err, nil))
+				return
+			}
+			pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesPostfix
+
+			keys := cache.GetInstance().GetKeys(pattern)
+			cache.GetInstance().DelMany(keys)
+
+			key := "1" + configmanager.GetInstance().RedisSeprator +
+				fmt.Sprintf("%d", modelTitles.Id) +
+				configmanager.GetInstance().RedisSeprator +
+				configmanager.GetInstance().ClassName +
+				configmanager.GetInstance().RedisSeprator +
+				configmanager.GetInstance().SingleTitlePostfix +
+				configmanager.GetInstance().TitlesPostfix
+
+			cache.GetInstance().Del(key)
+
+			if updateTitle {
+				titleSummary := models.TitlesSummary{Id: modelTitles.Id, OriginalTitle: modelTitles.OriginalTitle}
+				serviceutils.GetInstance().PublishEvent(titleSummary, configmanager.GetInstance().ClassName, "vidmicro.title.updated")
+			}
+
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
+			return
+		}
+
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.NOTHIN_TO_UPDATE, err, nil))
+	}
+}
+
+func (u *TitlesController) handleDeleteTitles() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// TODO:Delete meta data
+		modelTitles := models.Titles{}
+		if err := c.ShouldBind(&modelTitles); err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		err := u.Validate(c.GetString("apiPath")+"/delete", modelTitles)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
 		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelTitles.Id}, false, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_FAILED, err, nil))
 			return
 		}
+
+		pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesPostfix
+
+		keys := cache.GetInstance().GetKeys(pattern)
+		cache.GetInstance().DelMany(keys)
+
+		key := "1" + configmanager.GetInstance().RedisSeprator +
+			fmt.Sprintf("%d", modelTitles.Id) +
+			configmanager.GetInstance().RedisSeprator +
+			configmanager.GetInstance().ClassName +
+			configmanager.GetInstance().RedisSeprator +
+			configmanager.GetInstance().SingleTitlePostfix +
+			configmanager.GetInstance().TitlesPostfix
+
+		cache.GetInstance().Del(key)
+
+		titleSummary := models.TitlesSummary{Id: modelTitles.Id, OriginalTitle: modelTitles.OriginalTitle}
+		serviceutils.GetInstance().PublishEvent(titleSummary, configmanager.GetInstance().ClassName, "vidmicro.title.deleted")
+
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_SUCCESS, err, nil))
 	}
 }
 
+func (u *TitlesController) handleAddTitleLanguages() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		modelLanguagesMeta := models.LanguageMeta{}
+		if err := c.ShouldBind(&modelLanguagesMeta); err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		modelLanguagesMeta.Id = xid.New().String()
+		if modelLanguagesMeta.LanguageId <= 0 {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("language id is required"), nil))
+			return
+		}
+
+		if modelLanguagesMeta.StatusId <= 0 {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("status id is required"), nil))
+			return
+		}
+
+		if modelLanguagesMeta.TitlesId <= 0 {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("title id is required"), nil))
+			return
+		}
+
+		languageMetaController, _ := u.BaseControllerFactory.GetController(baseconst.LanguageMeta)
+		count, err := languageMetaController.Count(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), map[string]interface{}{"language_id": modelLanguagesMeta.LanguageId, "titles_id": modelLanguagesMeta.TitlesId})
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		if count >= 1 {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("language already exsist with this id for this title"), nil))
+			return
+		}
+
+		if !cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelLanguagesMeta.LanguageId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix)) {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the language is not found id:%d", modelLanguagesMeta.LanguageId), nil))
+			return
+		}
+
+		if !cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelLanguagesMeta.StatusId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix)) {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the sstatus is not found id:%d for language:%d", modelLanguagesMeta.StatusId, modelLanguagesMeta.LanguageId), nil))
+			return
+		}
+
+		titleCount, err := languageMetaController.Count(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), map[string]interface{}{"id": modelLanguagesMeta.TitlesId})
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+		if titleCount <= 0 {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("no title exists with this id"), nil))
+			return
+		}
+
+		languageMetaController.Add(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), modelLanguagesMeta, false)
+		serviceutils.GetInstance().PublishEvent(modelLanguagesMeta, configmanager.GetInstance().ClassName, "vidmicro.title.language.added")
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, nil, nil))
+	}
+}
+
+func (u *TitlesController) handleDeleteLanguages() gin.HandlerFunc {
+	return func(c *gin.Context) {
+	}
+}
 func (u TitlesController) RegisterApis() {
 	baserouter.GetInstance().GetLoginRouter().PUT("/api/titles", u.handleCreateTitles())
 	baserouter.GetInstance().GetLoginRouter().GET("/api/titles", u.handleGetTitles())
 	baserouter.GetInstance().GetLoginRouter().POST("/api/titles", u.handleUpdateTitles())
 	baserouter.GetInstance().GetLoginRouter().DELETE("/api/titles", u.handleDeleteTitles())
+	baserouter.GetInstance().GetLoginRouter().POST("/api/add_title_language", u.handleAddTitleLanguages())
+	baserouter.GetInstance().GetLoginRouter().POST("/api/delete_title_language", u.handleDeleteLanguages())
 }
