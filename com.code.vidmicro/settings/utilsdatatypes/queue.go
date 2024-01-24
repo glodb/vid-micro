@@ -1,4 +1,4 @@
-package utils
+package utilsdatatypes
 
 import (
 	"container/list"
@@ -6,7 +6,7 @@ import (
 )
 
 type Queue struct {
-	qlist *list.List
+	qlist      *list.List
 	queueMutex sync.Mutex
 }
 
@@ -54,7 +54,7 @@ func (ts *Queue) Copy() []interface{} {
 	s := make([]interface{}, 0)
 	ts.queueMutex.Lock()
 	defer ts.queueMutex.Unlock()
-	
+
 	for temp := ts.qlist.Front(); temp != nil; temp = temp.Next() {
 		s = append(s, temp.Value)
 	}

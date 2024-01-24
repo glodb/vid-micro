@@ -8,7 +8,7 @@ type Contents struct {
 	Description     string `db:"description TEXT" json:"description" form:"description"`
 	TypeId          int    `db:"type_id INTEGER" json:"type_id" form:"type_id"`
 	TypeName        string `json:"type_name"`
-	LanguageId      int    `db:"language_id VARCHAR(255)" json:"language_id" form:"language_id"`
+	LanguageId      int    `db:"language_id INTEGER" json:"language_id" form:"language_id"`
 	LanguageName    string `json:"language_name"`
 	LanguageCode    string `json:"language_code"`
 	AssociatedTitle int    `db:"associated_title VARCHAR(255)" json:"associated_title" form:"associated_title"`
