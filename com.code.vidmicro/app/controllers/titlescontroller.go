@@ -17,17 +17,20 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/s3uploader"
+	"com.code.vidmicro/com.code.vidmicro/settings/searchengine"
 	"com.code.vidmicro/com.code.vidmicro/settings/serviceutils"
 	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
 	"github.com/rs/xid"
+	"golang.org/x/sync/semaphore"
 )
 
 type TitlesController struct {
 	baseinterfaces.BaseControllerFactory
 	basefunctions.BaseFucntionsInterface
 	basevalidators.ValidatorInterface
+	semaphore *semaphore.Weighted
 }
 
 func (u TitlesController) GetDBName() basetypes.DBName {
@@ -39,6 +42,7 @@ func (u TitlesController) GetCollectionName() basetypes.CollectionName {
 }
 
 func (u TitlesController) DoIndexing() error {
+	u.semaphore = semaphore.NewWeighted(int64(configmanager.GetInstance().MaxMeiliSearchUpdates))
 	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.Titles{})
 	return nil
 }
@@ -79,16 +83,32 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 			newXID := xid.New()
 			languageMetadata.Id = newXID.String()
 
-			if !cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", languageMetadata.LanguageId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix)) {
+			languageMetaDetails := models.LanguageMetaDetails{LanguageId: titlesLanguage.LanguageId, StatusId: titlesLanguage.StatusId}
+			languageData, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", languageMetadata.LanguageId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix))
+
+			if err != nil && len(languageData) <= 0 {
 				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the language is not found id:%d", languageMetadata.LanguageId), nil))
 				return
 			}
 
-			if !cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", languageMetadata.StatusId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix)) {
+			lang := models.Language{}
+			lang.DecodeRedisData(languageData)
+			languageMetaDetails.LanguageCode = lang.Code
+			languageMetaDetails.LanguageName = lang.Name
+
+			statusData, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", languageMetadata.StatusId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix))
+
+			if err != nil && len(statusData) <= 0 {
 				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the sstatus is not found id:%d for language:%d", languageMetadata.StatusId, languageMetadata.LanguageId), nil))
 				return
 			}
 
+			stat := models.Status{}
+			stat.DecodeRedisData(statusData)
+			languageMetaDetails.StatusId = stat.Id
+			languageMetaDetails.StatusName = stat.Name
+
+			modelTitles.LanguagesDetails = append(modelTitles.LanguagesDetails, languageMetaDetails)
 			modelTitles.LanguagesMeta = append(modelTitles.LanguagesMeta, languageMetadata.Id)
 			languagesMetadata = append(languagesMetadata, languageMetadata)
 			titlesSummary.Languages = append(titlesSummary.Languages, titlesLanguage.LanguageId)
@@ -147,6 +167,16 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 
 		keys := cache.GetInstance().GetKeys(pattern)
 		cache.GetInstance().DelMany(keys)
+
+		tempMeiliTitle := models.MeilisearchTitle{
+			Id:               modelTitles.Id,
+			OriginalTitle:    modelTitles.OriginalTitle,
+			CoverUrl:         modelTitles.CoverUrl,
+			LanguagesDetails: modelTitles.LanguagesDetails,
+			Year:             modelTitles.Year,
+		}
+
+		searchengine.GetInstance().ProcessTitleDocuments(tempMeiliTitle)
 
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelTitles))
 	}
@@ -335,10 +365,18 @@ func (u *TitlesController) handleUpdateTitles() gin.HandlerFunc {
 				serviceutils.GetInstance().PublishEvent(titleSummary, configmanager.GetInstance().ClassName, "vidmicro.title.updated")
 			}
 
+			tempMeiliTitle := models.MeilisearchTitle{
+				Id:               modelTitles.Id,
+				OriginalTitle:    modelTitles.OriginalTitle,
+				CoverUrl:         modelTitles.CoverUrl,
+				LanguagesDetails: modelTitles.LanguagesDetails,
+				Year:             modelTitles.Year,
+			}
+			searchengine.GetInstance().ProcessTitleDocuments(tempMeiliTitle)
+
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
 			return
 		}
-
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.NOTHIN_TO_UPDATE, err, nil))
 	}
 }
@@ -355,6 +393,14 @@ func (u *TitlesController) handleDeleteTitles() gin.HandlerFunc {
 		err := u.Validate(c.GetString("apiPath")+"/delete", modelTitles)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		modelMeiliTitles := models.MeilisearchTitle{}
+		err = searchengine.GetInstance().DeleteDocuments(modelMeiliTitles)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_FAILED, err, nil))
 			return
 		}
 
@@ -384,6 +430,7 @@ func (u *TitlesController) handleDeleteTitles() gin.HandlerFunc {
 		cache.GetInstance().Del(key)
 
 		titleSummary := models.TitlesSummary{Id: modelTitles.Id, OriginalTitle: modelTitles.OriginalTitle}
+
 		serviceutils.GetInstance().PublishEvent(titleSummary, configmanager.GetInstance().ClassName, "vidmicro.title.deleted")
 
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_SUCCESS, err, nil))
@@ -458,6 +505,7 @@ func (u *TitlesController) handleAddTitleLanguages() gin.HandlerFunc {
 		}
 
 		serviceutils.GetInstance().PublishEvent(modelLanguagesMeta, configmanager.GetInstance().ClassName, "vidmicro.title.language.added")
+		go u.updateForMeilisearch(modelLanguagesMeta.TitlesId)
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, nil, nil))
 	}
 }
@@ -520,7 +568,92 @@ func (u *TitlesController) handleDeleteLanguages() gin.HandlerFunc {
 		}
 
 		serviceutils.GetInstance().PublishEvent(modelLanguagesMeta, configmanager.GetInstance().ClassName, "vidmicro.title.language.deleted")
+		go u.updateForMeilisearch(modelLanguagesMeta.TitlesId)
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_SUCCESS, nil, nil))
+	}
+}
+
+func (u *TitlesController) updateForMeilisearch(titlesId int) {
+	modelTitles := models.Titles{}
+	query := map[string]interface{}{"id": modelTitles.Id}
+
+	rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "", query, &modelTitles, false, "", false)
+
+	if err == nil {
+		defer rows.Close()
+	} else {
+		return
+	}
+	tempTitle := models.Titles{}
+	for rows.Next() {
+		// Scan the row's values into the User struct.
+		err := rows.Scan(&tempTitle.Id, &tempTitle.OriginalTitle, &tempTitle.Year, &tempTitle.CoverUrl, pq.Array(&tempTitle.LanguagesMeta))
+		if err != nil {
+			return
+		}
+
+		controller, _ := u.BaseControllerFactory.GetController(baseconst.LanguageMeta)
+		languageController := controller.(*LanguageMetadataController)
+
+		tempTitle.LanguagesDetails, err = languageController.GetLanguageDetails(tempTitle.LanguagesMeta)
+
+		if err != nil {
+			tempTitle.LanguagesDetails = make([]models.LanguageMetaDetails, 0)
+		}
+	}
+
+	tempMeiliTitle := models.MeilisearchTitle{
+		Id:               modelTitles.Id,
+		OriginalTitle:    tempTitle.OriginalTitle,
+		CoverUrl:         tempTitle.CoverUrl,
+		LanguagesDetails: tempTitle.LanguagesDetails,
+		Year:             modelTitles.Year,
+	}
+
+	searchengine.GetInstance().ProcessTitleDocuments(tempMeiliTitle)
+}
+
+func (u *TitlesController) handleSearchTitles() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		modelTitles := models.MeilisearchTitle{}
+		if c.Query("search") != "" {
+			modelTitles.OriginalTitle = c.Query("search")
+		}
+
+		filter := "id > 1"
+
+		if c.Query("year") != "" {
+			filter += " AND year = " + c.Query("year")
+		}
+
+		if c.Query("type_name") != "" {
+			filter += " AND type_name = " + c.Query("type_name")
+		}
+
+		if c.Query("genre") != "" {
+			filter += " AND genres = " + c.Query("genre")
+		}
+
+		pageSize := configmanager.GetInstance().PageSize
+		if c.Query("limit") != "" {
+			pageSizeInt, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
+			pageSize = pageSizeInt
+		}
+
+		page := int64(1)
+		if c.Query("page") != "" {
+			pageInt, _ := strconv.ParseInt(c.Query("page"), 10, 64)
+			page = pageInt
+		}
+
+		pr, err := searchengine.GetInstance().SearchDocuments(modelTitles, pageSize, page, filter)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, nil, pr))
 	}
 }
 func (u TitlesController) RegisterApis() {
@@ -530,4 +663,5 @@ func (u TitlesController) RegisterApis() {
 	baserouter.GetInstance().GetLoginRouter().DELETE("/api/titles", u.handleDeleteTitles())
 	baserouter.GetInstance().GetLoginRouter().POST("/api/add_title_language", u.handleAddTitleLanguages())
 	baserouter.GetInstance().GetLoginRouter().POST("/api/delete_title_language", u.handleDeleteLanguages())
+	baserouter.GetInstance().GetLoginRouter().GET("/api/search_titles", u.handleSearchTitles())
 }

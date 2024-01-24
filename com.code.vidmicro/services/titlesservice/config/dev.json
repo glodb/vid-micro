@@ -26,7 +26,8 @@
         "/api/title_type":["GET", "PUT", "POST", "DELETE"],
         "/api/titles": ["GET", "PUT", "POST", "DELETE"],
         "/api/add_title_language":["POST"],
-        "/api/delete_title_language":["POST"]
+        "/api/delete_title_language":["POST"],
+        "/api/search_titles":["GET"]
     },
     "sessionSecret": "spiderman",
     "acl": {
@@ -35,7 +36,8 @@
             "/api/status":["GET"],
             "/api/languages":["GET"],
             "/api/title_type":["GET"],
-            "/api/titles": ["GET"]
+            "/api/titles": ["GET"],
+            "/api/search_titles":["GET"]
         },
         "admin": {
             "/api/genres":["GET","PUT","POST","DELETE"],
@@ -44,14 +46,16 @@
             "/api/title_type":["GET", "PUT", "POST", "DELETE"],
             "/api/titles": ["GET", "PUT", "POST", "DELETE"],
             "/api/add_title_language":["POST"],
-            "/api/delete_title_language":["POST"]
+            "/api/delete_title_language":["POST"],
+            "/api/search_titles":["GET"]
         },
         "manager": {
             "/api/genres":["GET"],
             "/api/status":["GET"],
             "/api/title_type":["GET"],
             "/api/languages":["GET"],
-            "/api/titles": ["GET"]
+            "/api/titles": ["GET"],
+            "/api/search_titles":["GET"]
         }
     },
     "titlesPostfix" :"titles_cached_pages",
@@ -65,5 +69,6 @@
         "host":"http://localhost:7700",
         "apikey":""
     },
-    "meiliSearchIndex":"titles_X2cgtdvr"
+    "meiliSearchIndex":"titles_X2cgtdvr",
+    "maxMeiliSearchUpdates": 500
 }
