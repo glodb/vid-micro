@@ -50,6 +50,9 @@ type config struct {
 	SessionExpirySeconds         int64                          `json:"sessionExpirySeconds"`
 	EmailConfig                  configModels.EmailConfig       `json:"emailConfig"`
 	EmailVerificationTokenExpiry int64                          `json:"emailVerificationTokenExpiry"`
+	EmailVerificationURL         string                         `json:"emailVerificationURL"`
+	EmailBody                    string                         `json:"emailBody"`
+	EmailSubject                 string                         `json:"emailSubject"`
 	Acl                          map[string]map[string]*utils.Set
 	Apis                         map[string]*utils.Set
 }

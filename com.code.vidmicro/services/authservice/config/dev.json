@@ -12,13 +12,16 @@
     ],
     "subscribedTopics": {
     },
+    "emailVerificationURL": "http://localhost:8080/api/verifyEmail/",
+    "emailBody": "Hi %s! Please verify your email address by clicking the following address: %s",
+    "emailSubject": "Vidmicro Email Verification",
     "emailConfig": {
         "smtpServer": "smtp.gmail.com",
         "port": 587,
-        "username": "haseebshalan@gmail.com",
-        "password": "dwkufltzytlmrlbu",
-        "fromAddress": "haseebshalan@gmail.com",
-        "fromName": "Aafaq",
+        "username": "your-name",
+        "password": "password",
+        "fromAddress": "email-address",
+        "fromName": "name",
         "isTLS": true
     },
     "emailVerificationTokenExpiry" : 360,

@@ -122,10 +122,10 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 			return
 		}
 
-		verificationURL := fmt.Sprintf("http://localhost:8080/api/verifyEmail/%s", verificationToken)
-		emailBody := fmt.Sprintf("Hi %s! Please verify your email address by clicking the following address: %s", modelUser.Username, verificationURL)
+		verificationURL := fmt.Sprintf("%s%s", configmanager.GetInstance().EmailVerificationURL, verificationToken)
+		emailBody := fmt.Sprintf(configmanager.GetInstance().EmailBody, modelUser.Username, verificationURL)
 
-		err = emails.GetInstance().SendVerificationEmail(modelUser.Email, "Vidmicro Email Verification", emailBody)
+		err = emails.GetInstance().SendVerificationEmail(modelUser.Email, configmanager.GetInstance().EmailSubject, emailBody)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.SEND_VERIFICATION_EMAIL_FAILED, err, nil))
 			return
