@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -11,6 +13,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/baserouter"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basevalidators"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/responses"
+	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"github.com/gin-gonic/gin"
 )
@@ -31,7 +34,41 @@ func (u GenresController) GetCollectionName() basetypes.CollectionName {
 
 func (u GenresController) DoIndexing() error {
 	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.Genres{})
+	keys := cache.GetInstance().GetKeys("*" + configmanager.GetInstance().GenresPostfix)
+	cache.GetInstance().DelMany(keys)
+
+	rows, _ := u.Find(u.GetDBName(), u.GetCollectionName(), "", map[string]interface{}{}, &models.Language{}, false, "", false)
+
+	defer rows.Close()
+	// Iterate over the rows.
+	for rows.Next() {
+		// Create a User struct to scan values into.
+
+		tempGenre := models.Genres{}
+
+		// Scan the row's values into the User struct.
+		err := rows.Scan(&tempGenre.Id, &tempGenre.Name)
+		if err != nil {
+			break
+		}
+
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", tempGenre.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix), tempGenre.EncodeRedisData())
+	}
 	return nil
+}
+
+func (u *GenresController) GetGenre(id int) (models.Genres, error) {
+	data, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix))
+	if err != nil {
+		return models.Genres{}, err
+	}
+	if len(data) <= 0 {
+		return models.Genres{}, errors.New("record not available")
+	}
+	genre := models.Genres{}
+	genre.DecodeRedisData(data)
+
+	return genre, nil
 }
 
 func (u *GenresController) SetBaseFunctions(inter basefunctions.BaseFucntionsInterface) {
@@ -58,6 +95,7 @@ func (u *GenresController) handleCreateGenre() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_FAILED, err, nil))
 			return
 		}
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelGenre.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix), modelGenre.EncodeRedisData())
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelGenre))
 	}
 }
@@ -128,7 +166,7 @@ func (u *GenresController) handleUpdateGenre() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_FAILED, err, nil))
 			return
 		}
-
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelGenre.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix), modelGenre.EncodeRedisData())
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
 	}
 }
@@ -154,6 +192,7 @@ func (u *GenresController) handleDeleteGenre() gin.HandlerFunc {
 			return
 		}
 
+		cache.GetInstance().Del(fmt.Sprintf("%d%s%s", modelGenre.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix))
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_SUCCESS, err, nil))
 	}
 }

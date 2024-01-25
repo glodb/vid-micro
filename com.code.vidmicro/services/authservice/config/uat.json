@@ -1,25 +1,42 @@
 {
-  "initClassName": "AUTHSERVICE",
-  "natsServer":"nats://127.0.0.1:4222",
+  "database": {
+      "dbname": "auth"
+  },
+  "microServiceName": "authService",
+  "address": "localhost:8080",
+  "controllers": ["User", "Session", "Roles"],
   "allowDB": true,
-  "serviceMicroName": "webserver-uat.fifo",
+  "serviceLogName": "auth",
   "publishingTopics": [
-    "init-settings-uat.fifo",
-    "send-otp-uat.fifo"
+      "vidmicro.content"
   ],
-  "processInitSettingsTopic": "init-settings-uat.fifo",
-  "processSendOTPTopic": "send-otp-uat.fifo",
-  "sslModePostgre": "",
-  "standardOutput": true,
-  "dbPoolSizePostgre": 50,
-  "dbMaxConnAgePostgre": 10,
-  "dbMinIdleConnsPostgre": 10,
-  "dbIdleTimeoutPostgre": 5,
-  "dbPoolTimeoutPostgre": 30,
-  "dbChunkTimeIntervalPostgre": "5000",
-  "geofenceServiceName": "geofenceservice-uat",
-  "totalPostfix": "-total",
-  "defaultRoleID": 3,
-  "defaultCompanyRoleID": 1,
-  "limit": 10
+  "subscribedTopics": {
+  },
+  "apis": {
+      "/api/createSession":["GET"],
+      "/api/signup":["POST"],
+      "/api/login":["POST"],
+      "/api/refreshToken":["POST"],
+      "/api/getUser":["GET"],
+      "/api/blackListUser":["POST"],
+      "/api/editUser": ["POST"]
+  },
+  "sessionSecret": "*mongonormalcontrollers.SessionController",
+  "tokenExpiry": 5000,
+  "acl": {
+      "user": {
+          "/api/getUser": ["GET"],
+          "/api/editUser":["POST"]
+      },
+      "admin": {
+          "/api/getUser": ["GET"],
+          "/api/editUser":["POST"],
+          "/api/blackListUser":["POST"]
+      },
+      "manager": {
+          "/api/getUser": ["GET"],
+          "/api/editUser":["POST"]
+      }
+  },
+  "sessionExpirySeconds":6000000
 }

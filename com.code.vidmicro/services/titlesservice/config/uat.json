@@ -1,25 +1,85 @@
 {
-  "initClassName": "AUTHSERVICE",
-  "natsServer":"nats://127.0.0.1:4222",
+  "database": {
+      "dbname": "titles"
+  },
+  "microServiceName": "titlesService",
+  "address": "localhost:8081",
+  "controllers": ["Genres", "Status", "Language", "TitleType", "Titles", "TitleMeta"],
   "allowDB": true,
-  "serviceMicroName": "webserver-uat.fifo",
+  "serviceLogName": "titles",
   "publishingTopics": [
-    "init-settings-uat.fifo",
-    "send-otp-uat.fifo"
+      "vidmicro.language.created",
+      "vidmicro.language.updated",
+      "vidmicro.language.deleted",
+      "vidmicro.title.created",
+      "vidmicro.title.updated",
+      "vidmicro.title.deleted",
+      "vidmicro.title.language.deleted",
+      "vidmicro.title.language.added"
   ],
-  "processInitSettingsTopic": "init-settings-uat.fifo",
-  "processSendOTPTopic": "send-otp-uat.fifo",
-  "sslModePostgre": "",
-  "standardOutput": true,
-  "dbPoolSizePostgre": 50,
-  "dbMaxConnAgePostgre": 10,
-  "dbMinIdleConnsPostgre": 10,
-  "dbIdleTimeoutPostgre": 5,
-  "dbPoolTimeoutPostgre": 30,
-  "dbChunkTimeIntervalPostgre": "5000",
-  "geofenceServiceName": "geofenceservice-uat",
-  "totalPostfix": "-total",
-  "defaultRoleID": 3,
-  "defaultCompanyRoleID": 1,
-  "limit": 10
+  "subscribedTopics": {
+  },
+  "apis": {
+      "/api/genres":["GET", "PUT", "POST", "DELETE"],
+      "/api/status":["GET", "PUT", "POST", "DELETE"],
+      "/api/languages":["GET", "PUT", "POST", "DELETE"],
+      "/api/title_type":["GET", "PUT", "POST", "DELETE"],
+      "/api/titles": ["GET", "PUT", "POST", "DELETE"],
+      "/api/title_meta": ["GET", "PUT", "POST", "DELETE"],
+      "/api/add_title_language":["POST"],
+      "/api/delete_title_language":["POST"],
+      "/api/search_titles":["GET"],
+      "/api/add_title_genre":["POST"],
+      "/api/delete_title_genre":["POST"]
+  },
+  "sessionSecret": "spiderman",
+  "acl": {
+      "user": {
+          "/api/genres":["GET"],
+          "/api/status":["GET"],
+          "/api/languages":["GET"],
+          "/api/title_type":["GET"],
+          "/api/titles": ["GET"],
+          "/api/title_meta": ["GET"],
+          "/api/search_titles":["GET"]
+      },
+      "admin": {
+          "/api/genres":["GET","PUT","POST","DELETE"],
+          "/api/status":["GET", "PUT", "POST", "DELETE"],
+          "/api/languages":["GET", "PUT", "POST", "DELETE"],
+          "/api/title_type":["GET", "PUT", "POST", "DELETE"],
+          "/api/titles": ["GET", "PUT", "POST", "DELETE"],
+          "/api/title_meta": ["GET", "PUT", "POST", "DELETE"],
+          "/api/add_title_language":["POST"],
+          "/api/delete_title_language":["POST"],
+          "/api/search_titles":["GET"],
+          "/api/add_title_genre":["POST"],
+          "/api/delete_title_genre":["POST"]
+      },
+      "manager": {
+          "/api/genres":["GET"],
+          "/api/status":["GET"],
+          "/api/title_type":["GET"],
+          "/api/languages":["GET"],
+          "/api/titles": ["GET"],
+          "/api/title_meta": ["GET"],
+          "/api/search_titles":["GET"]
+      }
+  },
+  "titlesPostfix" :"titles_cached_pages",
+  "singleTitlePostfix": "single_",
+  "languagePostfix": "_titles_languages",
+  "genresPostfix":"_titles_genres_postfix",
+  "typePostfix":"_titles_type_postfix",
+  "statusPostfix": "_titles_status",
+  "languageMetadataPostfix": "_titles_languages_metadata_postfix",
+  "titlesMetaPostfix": "_titles_service_titles_meta_postfix",
+  "languageMetaExpiryTime":600000,
+  "titleExpiryTime": 600000,
+  "meilisearch": {
+      "host":"http://localhost:7700",
+      "apikey":""
+  },
+  "meiliSearchIndex":"titles_X2cgtdvr",
+  "maxMeiliSearchUpdates": 500
 }

@@ -87,7 +87,15 @@ func (se *searchEngine) ProcessTitleDocuments(title models.MeilisearchTitle) {
 		tempTitle.Score = title.Score
 	}
 
-	info, err := se.client.Index(configmanager.GetInstance().MeilisearchIndex).UpdateDocuments([]models.MeilisearchTitle{title})
+	if len(title.Genres) > 0 {
+		tempTitle.Genres = title.Genres
+	}
+
+	if len(title.GenresObject) > 0 {
+		tempTitle.GenresObject = title.GenresObject
+	}
+
+	info, err := se.client.Index(configmanager.GetInstance().MeilisearchIndex).UpdateDocuments([]models.MeilisearchTitle{tempTitle})
 	if err != nil {
 		log.Println(err)
 	} else {
@@ -130,8 +138,32 @@ func (se *searchEngine) SearchDocuments(title models.MeilisearchTitle, pageSize 
 	return pr, nil
 }
 
+func (se *searchEngine) DeleteDocumentsMeta(title models.MeilisearchTitle) error {
+	tempTitle := models.MeilisearchTitle{}
+	err := se.client.Index(configmanager.GetInstance().MeilisearchIndex).GetDocument(fmt.Sprintf("%d", title.Id), nil, &tempTitle)
+	if err != nil {
+		log.Println(err)
+	}
+
+	tempTitle.Id = title.Id
+	tempTitle.AlternativeName = ""
+	tempTitle.Sequence = 0
+	tempTitle.TypeId = 0
+	tempTitle.TypeName = ""
+	tempTitle.Score = 0
+	tempTitle.Genres = []string{}
+	tempTitle.GenresObject = make(map[int]string)
+
+	info, err := se.client.Index(configmanager.GetInstance().MeilisearchIndex).UpdateDocuments([]models.MeilisearchTitle{tempTitle})
+	if err != nil {
+		log.Println(err)
+	} else {
+		log.Println(info)
+	}
+	return err
+}
+
 func (se *searchEngine) DeleteDocuments(title models.MeilisearchTitle) error {
-	title.Id = 287947
 	_, err := se.client.Index(configmanager.GetInstance().MeilisearchIndex).DeleteDocument(fmt.Sprintf("%d", title.Id))
 	return err
 }

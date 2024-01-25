@@ -43,7 +43,7 @@ func (u *TitlesSummaryController) SetBaseFunctions(inter basefunctions.BaseFucnt
 
 func (u *TitlesSummaryController) UpdateTitleLanguage(languageMeta models.LanguageMeta) {
 
-	updateQuery := "UPDATE " + string(u.GetCollectionName()) + " SET languages_meta = array_append(languages_meta, $1) WHERE id = $2"
+	updateQuery := "UPDATE " + string(u.GetCollectionName()) + " SET languages_meta = array_append(languages_meta, $1) WHERE id = $2 AND $1 = ANY(languages_meta)"
 	err := u.UpdateOne(u.GetDBName(), u.GetCollectionName(), updateQuery, []interface{}{languageMeta.LanguageId, languageMeta.TitlesId}, false)
 	if err == nil {
 		cache.GetInstance().SAdd([]interface{}{fmt.Sprintf("%d%s%s", languageMeta.TitlesId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTitleLanguagesPostfix), fmt.Sprintf("%d", languageMeta.LanguageId)})

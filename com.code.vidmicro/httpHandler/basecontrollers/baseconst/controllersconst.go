@@ -14,4 +14,5 @@ const (
 	TitlesSummary   = "TitlesSummary"
 	ContentType     = "ContentType"
 	Content         = "Content"
+	TitleMeta       = "TitleMeta"
 )

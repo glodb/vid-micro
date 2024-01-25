@@ -36,5 +36,11 @@
         "folder": "static"
     },
     "pageSize": 10,
-    "redisSeprator": "_"
+    "redisSeprator": "_",
+    "allowedExtensions": {
+        ".jpg":  true,
+		".jpeg": true,
+		".png":  true
+    },
+    "allowedSizeInMbs": 10
 }

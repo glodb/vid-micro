@@ -22,10 +22,6 @@ func (u *TitlesService) Run() error {
 
 	u.AssignSubscriber()
 	serviceutils.GetInstance().RunService()
-
-	data := map[string]string{"abc": "ced"}
-
-	serviceutils.GetInstance().PublishEvent(data, configmanager.GetInstance().ClassName, "vidmicro.content")
 	u.RunServer()
 
 	return nil

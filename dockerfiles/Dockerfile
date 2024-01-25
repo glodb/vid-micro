@@ -3,6 +3,8 @@ FROM golang:alpine as build_base
 RUN apk add --no-cache git
 RUN apk add build-base
 
+VOLUME /root/.aws
+
 # Set the Current Working Directory inside the container
 WORKDIR /app
 
@@ -15,17 +17,17 @@ RUN go mod download
 COPY . .
 
 # Build the Go app
-RUN go build -mod=mod -o ./sso .
+RUN go build -mod=mod -o ./vidmicro .
 
 FROM alpine:latest
-
+RUN apk add ca-certificates
 WORKDIR /app
 
-COPY --from=build_base /app/setup /app/setup
-COPY --from=build_base /app/sso /app/
-
-# This container exposes port 8080 to the outside world
-EXPOSE 8080
+COPY --from=build_base /app/vidmicro /app
+COPY --from=build_base /app/config /app/config
+COPY --from=build_base /app/com.code.vidmicro/services/authservice/config /app/com.code.vidmicro/services/authservice/config
+COPY --from=build_base /app/com.code.vidmicro/services/contentservice/config /app/com.code.vidmicro/services/contentservice/config
+COPY --from=build_base /app/com.code.vidmicro/services/titlesservice/config /app/com.code.vidmicro/services/titlesservice/config
 
 # Run the binary program produced by `go install`
-ENTRYPOINT ["./sso"]
+ENTRYPOINT ["./vidmicro"]

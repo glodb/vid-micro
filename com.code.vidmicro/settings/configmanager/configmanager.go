@@ -52,6 +52,11 @@ type config struct {
 	Meilisearch                  configModels.MeilisearchConfig `json:"meilisearch"`
 	MeilisearchIndex             string                         `json:"meiliSearchIndex"`
 	MaxMeiliSearchUpdates        int64                          `json:"maxMeiliSearchUpdates"`
+	GenresPostfix                string                         `json:"genresPostfix"`
+	TypePostfix                  string                         `json:"typePostfix"`
+	TitlesMetaPostfix            string                         `json:"titlesMetaPostfix"`
+	AllowedExtensions            map[string]bool                `json:"allowedExtensions"`
+	AllowedSizeInMbs             int                            `json:"allowedSizeInMbs"`
 	Acl                          map[string]map[string]*utilsdatatypes.Set
 	Apis                         map[string]*utilsdatatypes.Set
 }

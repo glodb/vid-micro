@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -11,6 +13,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/baserouter"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basevalidators"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/responses"
+	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"github.com/gin-gonic/gin"
 )
@@ -31,7 +34,41 @@ func (u TitleTypeController) GetCollectionName() basetypes.CollectionName {
 
 func (u TitleTypeController) DoIndexing() error {
 	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.TitleType{})
+	keys := cache.GetInstance().GetKeys("*" + configmanager.GetInstance().TypePostfix)
+	cache.GetInstance().DelMany(keys)
+
+	rows, _ := u.Find(u.GetDBName(), u.GetCollectionName(), "", map[string]interface{}{}, &models.Language{}, false, "", false)
+
+	defer rows.Close()
+	// Iterate over the rows.
+	for rows.Next() {
+		// Create a User struct to scan values into.
+
+		tempTitle := models.TitleType{}
+
+		// Scan the row's values into the User struct.
+		err := rows.Scan(&tempTitle.Id, &tempTitle.Name, &tempTitle.Slug)
+		if err != nil {
+			break
+		}
+
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", tempTitle.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TypePostfix), tempTitle.EncodeRedisData())
+	}
 	return nil
+}
+
+func (u *TitleTypeController) GetTitleType(id int) (models.TitleType, error) {
+	data, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TypePostfix))
+	if err != nil {
+		return models.TitleType{}, err
+	}
+	if len(data) <= 0 {
+		return models.TitleType{}, errors.New("record not available")
+	}
+	titleType := models.TitleType{}
+	titleType.DecodeRedisData(data)
+
+	return titleType, nil
 }
 
 func (u *TitleTypeController) SetBaseFunctions(inter basefunctions.BaseFucntionsInterface) {
@@ -51,13 +88,14 @@ func (u *TitleTypeController) handleCreateTitleType() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
 			return
 		}
-		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelTitleType, false)
+		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelTitleType, true)
 		modelTitleType.Id = int(id)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_FAILED, err, nil))
 			return
 		}
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelTitleType.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TypePostfix), modelTitleType.EncodeRedisData())
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelTitleType))
 	}
 }
@@ -128,6 +166,7 @@ func (u *TitleTypeController) handleUpdateTitleType() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_FAILED, err, nil))
 			return
 		}
+		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelTitleType.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TypePostfix), modelTitleType.EncodeRedisData())
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
 	}
 }
@@ -152,6 +191,7 @@ func (u *TitleTypeController) handleDeleteTitleType() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_FAILED, err, nil))
 			return
 		}
+		cache.GetInstance().Del(fmt.Sprintf("%d%s%s", modelTitleType.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TypePostfix))
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_SUCCESS, err, nil))
 	}
 }

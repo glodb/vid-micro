@@ -4,7 +4,7 @@
     },
     "microServiceName": "titlesService",
     "address": "localhost:8081",
-    "controllers": ["Genres", "Status", "Language", "TitleType", "Titles"],
+    "controllers": ["Genres", "Status", "Language", "TitleType", "Titles", "TitleMeta"],
     "allowDB": true,
     "serviceLogName": "titles",
     "publishingTopics": [
@@ -25,9 +25,12 @@
         "/api/languages":["GET", "PUT", "POST", "DELETE"],
         "/api/title_type":["GET", "PUT", "POST", "DELETE"],
         "/api/titles": ["GET", "PUT", "POST", "DELETE"],
+        "/api/title_meta": ["GET", "PUT", "POST", "DELETE"],
         "/api/add_title_language":["POST"],
         "/api/delete_title_language":["POST"],
-        "/api/search_titles":["GET"]
+        "/api/search_titles":["GET"],
+        "/api/add_title_genre":["POST"],
+        "/api/delete_title_genre":["POST"]
     },
     "sessionSecret": "spiderman",
     "acl": {
@@ -37,6 +40,7 @@
             "/api/languages":["GET"],
             "/api/title_type":["GET"],
             "/api/titles": ["GET"],
+            "/api/title_meta": ["GET"],
             "/api/search_titles":["GET"]
         },
         "admin": {
@@ -45,9 +49,12 @@
             "/api/languages":["GET", "PUT", "POST", "DELETE"],
             "/api/title_type":["GET", "PUT", "POST", "DELETE"],
             "/api/titles": ["GET", "PUT", "POST", "DELETE"],
+            "/api/title_meta": ["GET", "PUT", "POST", "DELETE"],
             "/api/add_title_language":["POST"],
             "/api/delete_title_language":["POST"],
-            "/api/search_titles":["GET"]
+            "/api/search_titles":["GET"],
+            "/api/add_title_genre":["POST"],
+            "/api/delete_title_genre":["POST"]
         },
         "manager": {
             "/api/genres":["GET"],
@@ -55,14 +62,18 @@
             "/api/title_type":["GET"],
             "/api/languages":["GET"],
             "/api/titles": ["GET"],
+            "/api/title_meta": ["GET"],
             "/api/search_titles":["GET"]
         }
     },
     "titlesPostfix" :"titles_cached_pages",
     "singleTitlePostfix": "single_",
     "languagePostfix": "_titles_languages",
+    "genresPostfix":"_titles_genres_postfix",
+    "typePostfix":"_titles_type_postfix",
     "statusPostfix": "_titles_status",
     "languageMetadataPostfix": "_titles_languages_metadata_postfix",
+    "titlesMetaPostfix": "_titles_service_titles_meta_postfix",
     "languageMetaExpiryTime":600000,
     "titleExpiryTime": 600000,
     "meilisearch": {

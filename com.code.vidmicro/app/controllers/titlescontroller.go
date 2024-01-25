@@ -182,6 +182,64 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 	}
 }
 
+func (u *TitlesController) GetSingleTitle(id int) (models.Titles, error) {
+	titles := make([]models.Titles, 0)
+	key := "1" + configmanager.GetInstance().RedisSeprator +
+		fmt.Sprintf("%d", id) +
+		configmanager.GetInstance().RedisSeprator +
+		configmanager.GetInstance().ClassName +
+		configmanager.GetInstance().RedisSeprator +
+		configmanager.GetInstance().SingleTitlePostfix +
+		configmanager.GetInstance().TitlesPostfix
+
+	if data, err := cache.GetInstance().Get(key); err == nil && len(data) > 0 {
+		pr := models.PaginationResults{}
+		pr.DecodeRedisData(data)
+		jsonData, err := sonic.Marshal(pr.Data)
+
+		if err != nil {
+			return models.Titles{}, err
+		}
+
+		err = sonic.Unmarshal(jsonData, &titles)
+		if err != nil {
+			return models.Titles{}, err
+		}
+	} else {
+		query := map[string]interface{}{"id": id}
+
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "", query, &models.Titles{}, false, " LIMIT 1", false)
+		if err != nil {
+			return models.Titles{}, err
+		}
+
+		for rows.Next() {
+			tempTitle := models.Titles{}
+			err := rows.Scan(&tempTitle.Id, &tempTitle.OriginalTitle, &tempTitle.Year, &tempTitle.CoverUrl, pq.Array(&tempTitle.LanguagesMeta))
+			if err != nil {
+				return models.Titles{}, err
+			}
+
+			controller, _ := u.BaseControllerFactory.GetController(baseconst.LanguageMeta)
+			languageController := controller.(*LanguageMetadataController)
+
+			tempTitle.LanguagesDetails, err = languageController.GetLanguageDetails(tempTitle.LanguagesMeta)
+
+			if err != nil {
+				tempTitle.LanguagesDetails = make([]models.LanguageMetaDetails, 0)
+			}
+
+			titles = append(titles, tempTitle)
+		}
+
+		pagination := models.NewPagination(1, int(configmanager.GetInstance().PageSize), 1)
+		pr := models.PaginationResults{Pagination: pagination, Data: titles}
+
+		cache.GetInstance().SetEx(key, pr.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
+	}
+	return titles[0], nil
+}
+
 func (u *TitlesController) handleGetTitles() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelTitles := models.Titles{}
@@ -362,6 +420,11 @@ func (u *TitlesController) handleUpdateTitles() gin.HandlerFunc {
 
 			if updateTitle {
 				titleSummary := models.TitlesSummary{Id: modelTitles.Id, OriginalTitle: modelTitles.OriginalTitle}
+
+				controller, _ := u.BaseControllerFactory.GetController(baseconst.TitleMeta)
+				metaController := controller.(*TitleMetaController)
+				metaController.ChangeTitleName(modelTitles.Id, modelTitles.OriginalTitle)
+
 				serviceutils.GetInstance().PublishEvent(titleSummary, configmanager.GetInstance().ClassName, "vidmicro.title.updated")
 			}
 
@@ -431,6 +494,7 @@ func (u *TitlesController) handleDeleteTitles() gin.HandlerFunc {
 
 		titleSummary := models.TitlesSummary{Id: modelTitles.Id, OriginalTitle: modelTitles.OriginalTitle}
 
+		searchengine.GetInstance().DeleteDocuments(models.MeilisearchTitle{Id: modelTitles.Id})
 		serviceutils.GetInstance().PublishEvent(titleSummary, configmanager.GetInstance().ClassName, "vidmicro.title.deleted")
 
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_SUCCESS, err, nil))
@@ -575,9 +639,9 @@ func (u *TitlesController) handleDeleteLanguages() gin.HandlerFunc {
 
 func (u *TitlesController) updateForMeilisearch(titlesId int) {
 	modelTitles := models.Titles{}
-	query := map[string]interface{}{"id": modelTitles.Id}
+	query := map[string]interface{}{"id": titlesId}
 
-	rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "", query, &modelTitles, false, "", false)
+	rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "", query, &modelTitles, false, " LIMIT 1", false)
 
 	if err == nil {
 		defer rows.Close()
