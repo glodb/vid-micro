@@ -2,8 +2,11 @@ package controllers
 
 import (
 	//"com.code.vidmicro/com.code.vidmicro/app/middlewares"
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -18,6 +21,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/emails"
+	settings "com.code.vidmicro/com.code.vidmicro/settings/googleloginconfig"
 	"com.code.vidmicro/com.code.vidmicro/settings/s3uploader"
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
 	"github.com/gin-gonic/gin"
@@ -168,7 +172,7 @@ func (u *UserController) handleVerifyEmail() gin.HandlerFunc {
 			}
 
 			// If the tokens match, update the user's isVerified flag in the database
-			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET is_verified = true WHERE verification_token = $1", []interface{}{emailVerificationToken}, false)
+			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET is_verified = true, verification_token = '' WHERE verification_token = $1", []interface{}{emailVerificationToken}, false)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.EMAIL_VERIFICATION_FAILED, err, nil))
 				return
@@ -179,6 +183,141 @@ func (u *UserController) handleVerifyEmail() gin.HandlerFunc {
 		} else {
 			// Token is invalid
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_EMAIL_OR_TOKEN, nil, nil))
+		}
+	}
+}
+
+func (u *UserController) handleGoogleLogin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		configSet := settings.GetInstance()
+		url := configSet.AuthCodeURL("randomstate")
+		log.Println("Generated URL:", url)
+		c.Redirect(http.StatusSeeOther, url)
+	}
+}
+
+// 3. Handle Callback
+func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		code := c.Query("code")
+		token, err := settings.GetInstance().Exchange(context.Background(), code)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
+			return
+		}
+
+		// 4. Exchange the token for user information
+		client := settings.GetInstance().Client(context.TODO(), token)
+		resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
+			return
+		}
+		defer resp.Body.Close()
+
+		var userInfo map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
+			return
+		}
+
+		log.Print(userInfo)
+
+		// Construct the upsert query
+		upsertQuery := `
+		INSERT INTO users (email, username, name, avatar_url, password, is_verified, role)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (email) DO UPDATE
+		SET 
+			username = $2, 
+			avatar_url = $3, 
+			is_verified = COALESCE(EXCLUDED.is_verified, users.is_verified);
+		`
+		userInfo["role"] = 2
+		// Execute the upsert query using RawQuery
+		err = u.RawQuery(u.GetDBName(), u.GetCollectionName(), upsertQuery, []interface{}{userInfo["email"], userInfo["name"], userInfo["name"], userInfo["picture"], userInfo["id"], true, userInfo["role"]}, true)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
+			return
+		}
+
+		// Retrieve the user from the database
+		var users []models.User
+		keys := "id, username, name, email, avatar_url, is_verified, salt, role, createdAt, updatedAt"
+		condition := map[string]interface{}{"email": userInfo["email"]}
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), keys, condition, &users, true, "", true)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
+			return
+		}
+		defer rows.Close()
+
+		// Iterate over the rows.
+		for rows.Next() {
+			// Create a User struct to scan values into.
+			var user models.User
+
+			// Scan the row's values into the User struct.
+			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.AvatarUrl, &user.IsVerified, &user.Salt, &user.Role, &user.CreatedAt, &user.UpdatedAt)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
+				return
+			}
+
+			// Append the user to the slice.
+			users = append(users, user)
+		}
+
+		// Check for errors from iterating over rows.
+		if err := rows.Err(); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
+			return
+		}
+
+		if len(users) >= 1 {
+			user := users[0]
+
+			// Generate JWT for the user
+			jwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
+				return
+			}
+
+			// Generate Refresh Token
+			refreshToken, err := u.generateRefreshToken()
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
+				return
+			}
+
+			// Create session
+			var session models.Session
+			sessionId, err := utils.GenerateUUID() // You can replace this with your session ID generation logic
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
+				return
+			}
+			session.Username = user.Username
+			session.Token = jwtToken
+			session.Name = user.Name
+			session.Email = user.Email
+			session.AvatarUrl = user.AvatarUrl
+			session.IsVerified = user.IsVerified
+			session.Salt = user.Salt
+			session.Role = user.Role
+			session.CreatedAt = user.CreatedAt
+			session.UpdatedAt = user.UpdatedAt
+			session.UserId = int64(user.Id)
+			session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
+
+			cache.GetInstance().SAdd([]interface{}{strconv.FormatInt(int64(user.Id), 10) + "_all_sessions", sessionId})
+			cache.GetInstance().Set(sessionId, session.EncodeRedisData())
+
+			// Respond with success message and tokens
+			c.AbortWithStatusJSON(http.StatusOK, gin.H{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "HTTPBasicAuth"})
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, errors.New("User not found in database"), nil))
 		}
 	}
 }
@@ -233,7 +372,7 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 			user := users[0]
 			password := utils.HashPassword(modelUser.Password, user.Salt)
 
-			if password == user.Password {
+			if password == user.Password { //
 				jwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
 
 				if err != nil {
@@ -607,4 +746,6 @@ func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/verifyEmail/:token", u.handleVerifyEmail())
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/resetPassword", u.handleResetPassword())
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/verifyPasswordHash", u.handleVerifyPasswordHash())
+	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/googleLogin", u.handleGoogleLogin())
+	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/googleCallback", u.handleGoogleCallback())
 }
