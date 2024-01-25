@@ -18,10 +18,10 @@
     "emailConfig": {
         "smtpServer": "smtp.gmail.com",
         "port": 587,
-        "username": "your-name",
-        "password": "password",
-        "fromAddress": "email-address",
-        "fromName": "name",
+        "username": "vidmicro195@gmail.com",
+        "password": "pvirzjmmnsnyhaou",
+        "fromAddress": "vidmicro195@gmail.com",
+        "fromName": "Aafaq",
         "isTLS": true
     },
     "emailVerificationTokenExpiry" : 360,

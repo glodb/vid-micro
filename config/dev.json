@@ -3,7 +3,7 @@
         "host": "127.0.0.1",
         "port": "5432",
         "username": "postgres",
-        "password": "pass123"
+        "password": "mysecretpassword"
     },
     "sessionKey": "spiderman",
     "natsServer":"nats://127.0.0.1:4222",
