@@ -99,7 +99,6 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GENERATE_EMAIL_VERIFICATION_TOKEN_FAILED, err, nil))
 			return
 		}
-		cache.GetInstance().Set(verificationToken, []byte(verificationToken))
 
 		modelUser.Salt, err = utils.GenerateSalt()
 		if err != nil {
@@ -168,24 +167,12 @@ func (u *UserController) handleVerifyEmail() gin.HandlerFunc {
 				return
 			}
 
-			// Token is valid and not expired, continue with verification logic
-
-			// Check if the token is stored in the cache
-			storedToken, err := cache.GetInstance().Get(emailVerificationToken)
-			if err != nil || string(storedToken) != emailVerificationToken {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_EMAIL_OR_TOKEN, nil, nil))
-				return
-			}
-
 			// If the tokens match, update the user's isVerified flag in the database
 			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET is_verified = true WHERE verification_token = $1", []interface{}{emailVerificationToken}, false)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.EMAIL_VERIFICATION_FAILED, err, nil))
 				return
 			}
-
-			// Remove the verification token from the cache
-			cache.GetInstance().Del(emailVerificationToken)
 
 			// Respond with success message
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.EMAIL_VERIFICATION_SUCCESS, nil, nil))
@@ -564,56 +551,43 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 
 func (u *UserController) handleVerifyPasswordHash() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelUser := models.User{}
-		if err := c.ShouldBind(&modelUser); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
-			return
-		}
-
-		err := u.Validate(c.GetString("apiPath"), modelUser)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
-			return
-		}
-
 		passwordHash := c.DefaultPostForm("password_hash", "")
 		newPassword := c.DefaultPostForm("new_password", "")
+
 		if passwordHash == "" || newPassword == "" {
 			// Handle the case where one or both fields are missing or empty
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_AND_NEW_PASSWORD_REQUIRED, err, nil))
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_AND_NEW_PASSWORD_REQUIRED, errors.New("password or hash not declared"), nil))
 			return
 		}
-		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, password_hash, role, salt", map[string]interface{}{"password_hash": passwordHash}, &modelUser, true, " AND is_verified=TRUE AND black_listed=FALSE LIMIT 1", true)
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, password_hash, role, salt", map[string]interface{}{"password_hash": passwordHash}, &models.User{}, true, " AND is_verified=TRUE AND black_listed=FALSE LIMIT 1", true)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
 			return
 		}
-		if rows.Next() {
-			// Create a User struct to scan values into.
-			var user models.User
 
-			// Scan the row's values into the User struct.
+		var user models.User
+		if rows.Next() {
 			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.PasswordHash, &user.Role, &user.Salt)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
 				return
 			}
 
-			modelUser = user
 		} else {
 			// Handle the case when there are no rows
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.NOT_VARIFIED_USER, err, nil))
 			return
 		}
-		if modelUser.PasswordHash != passwordHash {
+		if user.PasswordHash != passwordHash {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_PASSWORD_TOKEN, err, nil))
 			return
 		}
 
-		modelUser.Password = utils.HashPassword(newPassword, modelUser.Salt)
-		modelUser.PasswordHash = ""
-		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET password = $1, password_hash=$2", []interface{}{modelUser.Password, modelUser.PasswordHash}, false)
+		user.Password = utils.HashPassword(newPassword, user.Salt)
+		user.PasswordHash = ""
+
+		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET password = $1, password_hash=$2", []interface{}{user.Password, user.PasswordHash}, false)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_UPDATING_USER, err, nil))
 			return

@@ -67,12 +67,12 @@ const (
 	INVALID_EMAIL_OR_TOKEN                   = 1052
 	EMAIL_VERIFICATION_FAILED                = 1053
 	EMAIL_VERIFICATION_SUCCESS               = 1054
-	INVALID_PASSWORD_TOKEN                   = 1050
-	NOT_VARIFIED_USER                        = 1051
-	TOKEN_SENT_VIA_EMAIL                     = 1052
-	TOKEN_ALREADY_SENT                       = 1053
-	TOKEN_AND_NEW_PASSWORD_REQUIRED          = 1054
-	TOKEN_VERIFICTION_SUCCESS                = 1055
+	INVALID_PASSWORD_TOKEN                   = 1055
+	NOT_VARIFIED_USER                        = 1056
+	TOKEN_SENT_VIA_EMAIL                     = 1057
+	TOKEN_ALREADY_SENT                       = 1058
+	TOKEN_AND_NEW_PASSWORD_REQUIRED          = 1059
+	TOKEN_VERIFICTION_SUCCESS                = 1060
 )
 
 type Responses struct {
