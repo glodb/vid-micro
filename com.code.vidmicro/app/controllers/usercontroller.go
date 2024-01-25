@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	//"com.code.vidmicro/com.code.vidmicro/app/middlewares"
 	"errors"
 	"fmt"
 	"net/http"
@@ -467,6 +468,160 @@ func (u *UserController) handleEditUser() gin.HandlerFunc {
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.NOTHIN_TO_UPDATE, err, nil))
 	}
 }
+func (u *UserController) handleResetPassword() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		modelUser := models.User{}
+		if err := c.ShouldBind(&modelUser); err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		err := u.Validate(c.GetString("apiPath"), modelUser)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, password_hash, role, salt", map[string]interface{}{"email": modelUser.Email}, &modelUser, true, " AND is_verified=TRUE AND black_listed=FALSE LIMIT 1", true)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+			return
+		}
+		defer rows.Close()
+
+		if rows.Next() {
+			var user models.User
+			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.PasswordHash, &user.Role, &user.Salt)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+				return
+			}
+
+			// Process the user data
+			modelUser = user
+
+		} else {
+			// Handle the case when there are no rows
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.NOT_VARIFIED_USER, err, nil))
+			return
+		}
+		fmt.Println("check passwordHash from db: ", modelUser.PasswordHash)
+
+		if modelUser.PasswordHash != "" {
+			ok, _ := utils.IsTokenValid(modelUser.PasswordHash)
+			if ok {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_ALREADY_SENT, err, nil))
+				return
+			}
+			//TODO send email again
+			jwtToken, err := u.generateJWT(configmanager.GetInstance().PasswordTokenExpiry)
+
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+				return
+			}
+
+			emailBody := fmt.Sprintf(configmanager.GetInstance().ResetPasswordEmailBody, modelUser.Email, jwtToken)
+
+			err = emails.GetInstance().SendVerificationEmail(modelUser.Email, configmanager.GetInstance().ResetPasswordEmailSubject, emailBody)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.SEND_VERIFICATION_EMAIL_FAILED, err, nil))
+				return
+			}
+
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_SENT_VIA_EMAIL, err, nil))
+
+		} else {
+
+			jwtToken, err := u.generateJWT(configmanager.GetInstance().PasswordTokenExpiry)
+
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+				return
+			}
+
+			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET password_hash=$1 WHERE email=$2", []interface{}{jwtToken, modelUser.Email}, true)
+
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_UPDATING_USER, err, nil))
+				return
+			}
+			//TODO send email
+			emailBody := fmt.Sprintf(configmanager.GetInstance().ResetPasswordEmailBody, modelUser.Email, jwtToken)
+
+			err = emails.GetInstance().SendVerificationEmail(modelUser.Email, configmanager.GetInstance().ResetPasswordEmailSubject, emailBody)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.SEND_VERIFICATION_EMAIL_FAILED, err, nil))
+				return
+			}
+
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_SENT_VIA_EMAIL, err, nil))
+		}
+
+	}
+
+}
+
+func (u *UserController) handleVerifyPasswordHash() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		modelUser := models.User{}
+		if err := c.ShouldBind(&modelUser); err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		err := u.Validate(c.GetString("apiPath"), modelUser)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
+		passwordHash := c.DefaultPostForm("password_hash", "")
+		newPassword := c.DefaultPostForm("new_password", "")
+		if passwordHash == "" || newPassword == "" {
+			// Handle the case where one or both fields are missing or empty
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_AND_NEW_PASSWORD_REQUIRED, err, nil))
+			return
+		}
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, password_hash, role, salt", map[string]interface{}{"password_hash": passwordHash}, &modelUser, true, " AND is_verified=TRUE AND black_listed=FALSE LIMIT 1", true)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+			return
+		}
+		if rows.Next() {
+			// Create a User struct to scan values into.
+			var user models.User
+
+			// Scan the row's values into the User struct.
+			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.PasswordHash, &user.Role, &user.Salt)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+				return
+			}
+
+			modelUser = user
+		} else {
+			// Handle the case when there are no rows
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.NOT_VARIFIED_USER, err, nil))
+			return
+		}
+		if modelUser.PasswordHash != passwordHash {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_PASSWORD_TOKEN, err, nil))
+			return
+		}
+
+		modelUser.Password = utils.HashPassword(newPassword, modelUser.Salt)
+		modelUser.PasswordHash = ""
+		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET password = $1, password_hash=$2", []interface{}{modelUser.Password, modelUser.PasswordHash}, false)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_UPDATING_USER, err, nil))
+			return
+		}
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_VERIFICTION_SUCCESS, err, nil))
+
+	}
+}
 
 func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetOpenRouter().POST("/api/signup", u.handleRegisterUser())
@@ -476,4 +631,6 @@ func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetLoginRouter().POST("/api/blackListUser", u.handleBlackListUser())
 	baserouter.GetInstance().GetLoginRouter().POST("/api/editUser", u.handleEditUser())
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/verifyEmail/:token", u.handleVerifyEmail())
+	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/resetPassword", u.handleResetPassword())
+	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/verifyPasswordHash", u.handleVerifyPasswordHash())
 }

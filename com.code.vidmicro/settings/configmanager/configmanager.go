@@ -53,6 +53,8 @@ type config struct {
 	EmailVerificationURL         string                         `json:"emailVerificationURL"`
 	EmailBody                    string                         `json:"emailBody"`
 	EmailSubject                 string                         `json:"emailSubject"`
+	ResetPasswordEmailBody       string                         `json:"resetPasswordEmailBody"`
+	ResetPasswordEmailSubject    string                         `json:"resetPasswordEmailSubject"`
 	TitlesContentPostfix         string                         `json:"titlesContentPostfix"`
 	Meilisearch                  configModels.MeilisearchConfig `json:"meilisearch"`
 	MeilisearchIndex             string                         `json:"meiliSearchIndex"`
@@ -64,6 +66,7 @@ type config struct {
 	AllowedSizeInMbs             int                            `json:"allowedSizeInMbs"`
 	Acl                          map[string]map[string]*utilsdatatypes.Set
 	Apis                         map[string]*utilsdatatypes.Set
+	PasswordTokenExpiry          int64
 }
 
 var (

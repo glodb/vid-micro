@@ -67,6 +67,12 @@ const (
 	INVALID_EMAIL_OR_TOKEN                   = 1052
 	EMAIL_VERIFICATION_FAILED                = 1053
 	EMAIL_VERIFICATION_SUCCESS               = 1054
+	INVALID_PASSWORD_TOKEN                   = 1050
+	NOT_VARIFIED_USER                        = 1051
+	TOKEN_SENT_VIA_EMAIL                     = 1052
+	TOKEN_ALREADY_SENT                       = 1053
+	TOKEN_AND_NEW_PASSWORD_REQUIRED          = 1054
+	TOKEN_VERIFICTION_SUCCESS                = 1055
 )
 
 type Responses struct {
@@ -142,6 +148,14 @@ func (u *Responses) InitResponses() {
 	u.responses[INVALID_EMAIL_OR_TOKEN] = "INVALID_EMAIL_OR_TOKEN"
 	u.responses[EMAIL_VERIFICATION_FAILED] = "EMAIL_VERIFICATION_FAILED"
 	u.responses[EMAIL_VERIFICATION_SUCCESS] = "EMAIL_VERIFICATION_SUCCESS"
+	u.responses[INVALID_PASSWORD_TOKEN] = "Invalid password reset token"
+	u.responses[NOT_VARIFIED_USER] = "User not verified"
+	u.responses[TOKEN_SENT_VIA_EMAIL] = "Token sent via email"
+	u.responses[TOKEN_ALREADY_SENT] = "Token already sent and not expired"
+	u.responses[PASSWORD_MISMATCHED] = "Password mismatched"
+	u.responses[TOKEN_AND_NEW_PASSWORD_REQUIRED] = "Token and new password, both fields are required and should not be empty"
+	u.responses[TOKEN_VERIFICTION_SUCCESS] = "Password token verified successfully"
+
 }
 
 // GetResponse returns the message for the particular response code
