@@ -53,6 +53,8 @@ type config struct {
 	EmailVerificationURL         string                         `json:"emailVerificationURL"`
 	EmailBody                    string                         `json:"emailBody"`
 	EmailSubject                 string                         `json:"emailSubject"`
+	ResetPasswordEmailBody       string                         `json:"resetPasswordEmailBody"`
+	ResetPasswordEmailSubject    string                         `json:"resetPasswordEmailSubject"`
 	TitlesContentPostfix         string                         `json:"titlesContentPostfix"`
 	Meilisearch                  configModels.MeilisearchConfig `json:"meilisearch"`
 	MeilisearchIndex             string                         `json:"meiliSearchIndex"`
@@ -136,7 +138,7 @@ func (c *config) Setup() {
 // GetConfigNameAndPath get the config name on the basis of flag
 func (c *config) getConfigNameAndPath() (string, string, string) {
 	serverType := flag.String("env", "DEV", "use development server by default")
-	configPath := flag.String("con", "CONTENTSERVICE", "use Uploader server by default")
+	configPath := flag.String("con", "AUTHSERVICE", "use Uploader server by default")
 
 	var conName string
 	var conPath string

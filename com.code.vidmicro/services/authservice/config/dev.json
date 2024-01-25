@@ -18,12 +18,14 @@
     "emailConfig": {
         "smtpServer": "smtp.gmail.com",
         "port": 587,
-        "username": "your-name",
-        "password": "password",
-        "fromAddress": "email-address",
-        "fromName": "name",
+        "username": "haseebshalan@gmail.com",
+        "password": "dwkufltzytlmrlbu",
+        "fromAddress": "haseebshalan@gmail.com",
+        "fromName": "Aafaq",
         "isTLS": true
     },
+    "resetPasswordEmailBody": "Hi %s Please verify the reset password token: %s",
+    "resetPasswordEmailSubject": "Vidmicro - Reset password token",
     "emailVerificationTokenExpiry" : 360,
     "apis": {
         "/api/createSession":["GET"],
