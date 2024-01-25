@@ -130,6 +130,10 @@ func (u *MySqlFunctions) UpdateOne(dbName basetypes.DBName, collectionName baset
 	_, err := conn.Exec(query, data...)
 	return err
 }
+
+func (u *MySqlFunctions) RawQuery(dbName basetypes.DBName, collectionName basetypes.CollectionName, query string, data []interface{}, upsert bool) error {
+	return nil
+}
 func (u *MySqlFunctions) DeleteOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}, useOr bool, addParenthesis bool) error {
 	log.Println("Unimplemented DeleteOne MySql")
 	return nil

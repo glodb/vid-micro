@@ -333,6 +333,12 @@ func (u *PSqlFunctions) UpdateOne(dbName basetypes.DBName, collectionName basety
 	return err
 }
 
+func (u *PSqlFunctions) RawQuery(dbName basetypes.DBName, collectionName basetypes.CollectionName, query string, data []interface{}, upsert bool) error {
+	conn := baseconnections.GetInstance().GetConnection(basetypes.PSQL).GetDB(basetypes.PSQL).(*sql.DB)
+	_, err := conn.Exec(query, data...)
+	return err
+}
+
 func (u *PSqlFunctions) DeleteOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}, useOr bool, addParenthesis bool) error {
 	if len(condition) == 0 {
 		errors.New("delete can't run with out conditions")
