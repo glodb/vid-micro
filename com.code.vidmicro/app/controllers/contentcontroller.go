@@ -45,7 +45,8 @@ func (u *ContentController) SetBaseFunctions(inter basefunctions.BaseFucntionsIn
 }
 
 func (u *ContentController) validateTitleLanguage(content models.Contents) bool {
-	if cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", content.AssociatedTitle, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTitleLanguagesPostfix)) {
+	languageExist, _ := cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", content.AssociatedTitle, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTitleLanguagesPostfix))
+	if languageExist {
 		return cache.GetInstance().SetISMember(fmt.Sprintf("%d%s%s", content.AssociatedTitle, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTitleLanguagesPostfix), fmt.Sprintf("%d", content.LanguageId))
 	} else {
 		titleSummary, err := u.BaseControllerFactory.GetController(baseconst.TitlesSummary)
@@ -93,23 +94,30 @@ func (u *ContentController) handleCreateContent() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelContent := models.Contents{}
 		if err := c.ShouldBind(&modelContent); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/put", modelContent)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
 			return
 		}
 
 		if !u.validateTitleLanguage(modelContent) {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LANGUAGE_NOT_ADDED_IN_TITLE, errors.New("validating language failed"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.LANGUAGE_NOT_ADDED_IN_TITLE, errors.New("validating language failed"), nil))
 			return
 		}
 
-		if !cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelContent.TypeId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix)) {
+		statusExist, err := cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelContent.TypeId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix))
+
+		if !statusExist {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("status id is not correct"), nil))
+			return
+		}
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
 			return
 		}
 
@@ -259,7 +267,11 @@ func (u *ContentController) handleGetContent() gin.HandlerFunc {
 		pagination := models.NewPagination(count, int(pageSize), int(page))
 		pr := models.PaginationResults{Pagination: pagination, Data: contents}
 
-		cache.GetInstance().Set(key, pr.EncodeRedisData())
+		err = cache.GetInstance().Set(key, pr.EncodeRedisData())
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+			return
+		}
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, pr))
 	}
 }
@@ -324,13 +336,21 @@ func (u *ContentController) handleUpdateContent() gin.HandlerFunc {
 		}
 
 		if modelContent.TypeId >= 0 {
-			if cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelContent.TypeId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix)) {
+			typeExist, err := cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelContent.TypeId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix))
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+				return
+			}
+			if typeExist {
 				lengthString := strconv.FormatInt(int64(len(data)+1), 10)
 				if len(data) > 0 {
 					setPart += ","
 				}
 				setPart += "type_id = $" + lengthString
 				data = append(data, modelContent.TypeId)
+			} else {
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("one of the type doesn't exists"), nil))
+				return
 			}
 		}
 

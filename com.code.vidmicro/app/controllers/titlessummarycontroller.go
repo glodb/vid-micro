@@ -146,10 +146,16 @@ func (u *TitlesSummaryController) handleGetTitles() gin.HandlerFunc {
 		pr := models.PaginationResults{Pagination: pagination, Data: titles}
 
 		if modelTitles.Id <= 0 {
-			cache.GetInstance().Set(key, pr.EncodeRedisData())
+			err = cache.GetInstance().Set(key, pr.EncodeRedisData())
 		} else {
-			cache.GetInstance().SetEx(key, pr.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
+			err = cache.GetInstance().SetEx(key, pr.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
 		}
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, pr))
 	}
 }

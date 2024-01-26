@@ -95,7 +95,11 @@ func (u *GenresController) handleCreateGenre() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_FAILED, err, nil))
 			return
 		}
-		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelGenre.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix), modelGenre.EncodeRedisData())
+		err = cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelGenre.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix), modelGenre.EncodeRedisData())
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelGenre))
 	}
 }
@@ -166,7 +170,11 @@ func (u *GenresController) handleUpdateGenre() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_FAILED, err, nil))
 			return
 		}
-		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelGenre.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix), modelGenre.EncodeRedisData())
+		err = cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelGenre.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix), modelGenre.EncodeRedisData())
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
 	}
 }

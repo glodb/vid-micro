@@ -247,7 +247,12 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 					c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
 					return
 				}
-				cache.GetInstance().SetString(refreshToken, jwtToken)
+				err = cache.GetInstance().SetString(refreshToken, jwtToken)
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+					return
+				}
+
 				var session models.Session
 				var sessionId string
 				if val, ok := c.Get("session"); ok {
@@ -265,15 +270,24 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 				session.IsVerified = true
 				session.Salt = user.Salt
 				session.Role = user.Role
-				session.CreatedAt = user.CreatedAt
-				session.UpdatedAt = user.UpdatedAt
 				session.UserId = int64(user.Id)
 				session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
 
-				cache.GetInstance().SAdd([]interface{}{strconv.FormatInt(int64(user.Id), 10) + "_all_sessions", sessionId})
+				err = cache.GetInstance().SAdd([]interface{}{strconv.FormatInt(int64(user.Id), 10) + "_all_sessions", sessionId})
 
-				cache.GetInstance().Set(sessionId, session.EncodeRedisData())
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]string{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "HTTPBasicAuth"}))
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+					return
+				}
+
+				err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
+
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+					return
+				}
+
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]string{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "Bearer"}))
 
 			} else {
 				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PASSWORD_MISMATCHED, err, nil))
@@ -316,9 +330,13 @@ func (u *UserController) handleRefreshToken() gin.HandlerFunc {
 
 		session.Token = newJwtToken
 
-		cache.GetInstance().Set(sessionId, session.EncodeRedisData())
+		err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
 
-		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.REFRESH_TOKEN_SUCCESS, err, map[string]string{"jwtToken": newJwtToken, "refreshToken": refreshToken, "username": session.Username, "tokenType": "HTTPBasicAuth"}))
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.REFRESH_TOKEN_SUCCESS, err, map[string]string{"jwtToken": newJwtToken, "refreshToken": refreshToken, "username": session.Username, "tokenType": "Bearer"}))
 	}
 }
 
@@ -370,7 +388,11 @@ func (u *UserController) handleBlackListUser() gin.HandlerFunc {
 				var session models.Session
 				session.DecodeRedisData(data)
 				session.BlackListed = true
-				cache.GetInstance().Set(sessionId, session.EncodeRedisData())
+				err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+					return
+				}
 			}
 		}
 
@@ -437,7 +459,11 @@ func (u *UserController) handleEditUser() gin.HandlerFunc {
 			}
 		}
 
-		cache.GetInstance().Set(currentSession.SessionId, currentSession.EncodeRedisData())
+		err = cache.GetInstance().Set(currentSession.SessionId, currentSession.EncodeRedisData())
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
 
 		if len(data) > 0 {
 			lengthString := strconv.FormatInt(int64(len(data)+1), 10)

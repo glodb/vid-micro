@@ -79,7 +79,11 @@ func (u *LanguageMetadataController) GetLanguageDetails(ids []string) ([]models.
 
 			languageMeta := models.LanguageMetaDetails{LanguageId: languageObject.Id, LanguageName: languageObject.Name, LanguageCode: languageObject.Code, StatusId: statusObject.Id, StatusName: statusObject.Name}
 			languagesMeta = append(languagesMeta, languageMeta)
-			cache.GetInstance().SetEx(fmt.Sprintf("%s%s%s", language, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguageMetadataPostfix), languageMeta.EncodeRedisData(), configmanager.GetInstance().LanguageMetaExpiryTime)
+			err = cache.GetInstance().SetEx(fmt.Sprintf("%s%s%s", language, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguageMetadataPostfix), languageMeta.EncodeRedisData(), configmanager.GetInstance().LanguageMetaExpiryTime)
+
+			if err != nil {
+				return nil, err
+			}
 		}
 		if len(languagesMeta) <= 0 {
 			return nil, errors.New("language meta not found")

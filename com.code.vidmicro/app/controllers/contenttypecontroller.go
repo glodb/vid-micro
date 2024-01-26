@@ -81,7 +81,13 @@ func (u *ContentTypeController) handleCreateContentType() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_FAILED, err, nil))
 			return
 		}
-		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelContent.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix), modelContent.EncodeRedisData())
+		err = cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelContent.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix), modelContent.EncodeRedisData())
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelContent))
 	}
 }
@@ -151,7 +157,12 @@ func (u *ContentTypeController) handleUpdateContentType() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_FAILED, err, nil))
 			return
 		}
-		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelContent.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix), modelContent.EncodeRedisData())
+		err = cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelContent.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix), modelContent.EncodeRedisData())
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
 	}
 }

@@ -83,7 +83,11 @@ func (u *LanguageController) handleCreateLanguage() gin.HandlerFunc {
 		}
 
 		serviceutils.GetInstance().PublishEvent(modelLanguage, configmanager.GetInstance().MicroServiceName, "vidmicro.language.created")
-		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelLanguage.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix), modelLanguage.EncodeRedisData())
+		err = cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelLanguage.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix), modelLanguage.EncodeRedisData())
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+			return
+		}
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelLanguage))
 	}
 }
@@ -161,7 +165,11 @@ func (u *LanguageController) handleUpdateLanguage() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_FAILED, err, nil))
 			return
 		}
-		cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelLanguage.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix), modelLanguage.EncodeRedisData())
+		err = cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelLanguage.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix), modelLanguage.EncodeRedisData())
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+			return
+		}
 		serviceutils.GetInstance().PublishEvent(modelLanguage, configmanager.GetInstance().MicroServiceName, "vidmicro.language.updated")
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
 	}

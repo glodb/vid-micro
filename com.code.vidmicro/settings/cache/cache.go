@@ -70,7 +70,12 @@ func (cache *RedisCache) newPool() (*redis.Pool, error) {
 }
 
 func (cache *RedisCache) Set(key string, value []byte) error {
-	cache.semaphore.Acquire(context.TODO(), 1)
+	if err := cache.semaphore.Acquire(context.TODO(), 1); err != nil {
+		if configmanager.GetInstance().Redis.PrintRedis {
+			log.Println("TError: ("+configmanager.GetInstance().ServiceLogName+"),acquire semaphore:", err)
+		}
+		return err
+	}
 	c := cache.pool.Get()
 	defer cache.semaphore.Release(1)
 	defer c.Close()
@@ -79,10 +84,6 @@ func (cache *RedisCache) Set(key string, value []byte) error {
 
 		if configmanager.GetInstance().Redis.PrintRedis {
 			log.Println("RError: ("+configmanager.GetInstance().ServiceLogName+"), {Set} key:", key, " error:", err)
-		}
-		v := string(value)
-		if len(v) > 15 {
-			v = v[0:12] + "..."
 		}
 	}
 	return err
@@ -98,10 +99,6 @@ func (cache *RedisCache) SetEx(key string, value []byte, expiryTime int) error {
 
 		if configmanager.GetInstance().Redis.PrintRedis {
 			log.Println("RError: ("+configmanager.GetInstance().ServiceLogName+"), {Set} key:", key, " error:", err)
-		}
-		v := string(value)
-		if len(v) > 15 {
-			v = v[0:12] + "..."
 		}
 	}
 	return err
@@ -748,18 +745,18 @@ func (cache *RedisCache) HashIncrementByFloat(key string, field string, val floa
 	return value
 }
 
-func (cache *RedisCache) Exists(key string) bool {
+func (cache *RedisCache) Exists(key string) (bool, error) {
 	if err := cache.semaphore.Acquire(context.TODO(), 1); err != nil {
-
+		return false, err
 	}
 	c := cache.pool.Get()
 	defer cache.semaphore.Release(1)
 	defer c.Close()
 	data, err := redis.Bool(c.Do("EXISTS", key))
 	if err != nil {
-		return false
+		return false, err
 	}
-	return data
+	return data, nil
 }
 
 func (cache *RedisCache) GetMinSortedSet(key string) int {

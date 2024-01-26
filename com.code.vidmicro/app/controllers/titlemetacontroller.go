@@ -121,13 +121,19 @@ func (u *TitleMetaController) handleCreateTitleMeta() gin.HandlerFunc {
 		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelTitleMeta, false)
 		modelTitleMeta.Id = int(id)
 
-		searchengine.GetInstance().ProcessTitleDocuments(meilisearchRecord)
-		cache.GetInstance().SetEx(fmt.Sprintf("%d%s%s", modelTitleMeta.TitleId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TitlesMetaPostfix), meilisearchRecord.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
-
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_FAILED, err, nil))
 			return
 		}
+
+		searchengine.GetInstance().ProcessTitleDocuments(meilisearchRecord)
+		err = cache.GetInstance().SetEx(fmt.Sprintf("%d%s%s", modelTitleMeta.TitleId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TitlesMetaPostfix), meilisearchRecord.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelTitleMeta))
 	}
 }
@@ -197,7 +203,13 @@ func (u *TitleMetaController) handleGetTitleMeta() gin.HandlerFunc {
 				Genres:           genres,
 				GenresObject:     genreObject,
 			}
-			cache.GetInstance().SetEx(fmt.Sprintf("%d%s%s", meilisearchRecord.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TitlesMetaPostfix), meilisearchRecord.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
+			err = cache.GetInstance().SetEx(fmt.Sprintf("%d%s%s", meilisearchRecord.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TitlesMetaPostfix), meilisearchRecord.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
+
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+				return
+			}
+
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, meilisearchRecord))
 		}
 	}

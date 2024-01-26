@@ -329,10 +329,16 @@ func (u *TitlesController) handleGetTitles() gin.HandlerFunc {
 		pr := models.PaginationResults{Pagination: pagination, Data: titles}
 
 		if modelTitles.Id <= 0 {
-			cache.GetInstance().Set(key, pr.EncodeRedisData())
+			err = cache.GetInstance().Set(key, pr.EncodeRedisData())
 		} else {
-			cache.GetInstance().SetEx(key, pr.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
+			err = cache.GetInstance().SetEx(key, pr.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
 		}
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, pr))
 	}
 }
@@ -537,14 +543,25 @@ func (u *TitlesController) handleAddTitleLanguages() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("language already exsist with this id for this title"), nil))
 			return
 		}
-
-		if !cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelLanguagesMeta.LanguageId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix)) {
+		languageExists, err := cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelLanguagesMeta.LanguageId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix))
+		if !languageExists {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the language is not found id:%d", modelLanguagesMeta.LanguageId), nil))
 			return
 		}
 
-		if !cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelLanguagesMeta.StatusId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix)) {
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("redis connection failed:%d", modelLanguagesMeta.LanguageId), nil))
+			return
+		}
+
+		statusExist, err := cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelLanguagesMeta.StatusId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix))
+		if !statusExist {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the sstatus is not found id:%d for language:%d", modelLanguagesMeta.StatusId, modelLanguagesMeta.LanguageId), nil))
+			return
+		}
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("redis connection failed:%d", modelLanguagesMeta.LanguageId), nil))
 			return
 		}
 

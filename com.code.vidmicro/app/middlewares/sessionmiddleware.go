@@ -28,7 +28,12 @@ func (u *SessionMiddleware) GetHandlerFunc() gin.HandlerFunc {
 			c.Set("session", session)
 			c.Set("session-id", session.SessionId)
 			session.LastActivity = time.Now().Unix()
-			cache.GetInstance().Set(c.Request.Header.Get("vidmicroSession"), session.EncodeRedisData())
+			err = cache.GetInstance().Set(c.Request.Header.Get("vidmicroSession"), session.EncodeRedisData())
+
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+				return
+			}
 			c.Next()
 		}
 	}
