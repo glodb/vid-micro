@@ -27,6 +27,12 @@
     "resetPasswordEmailBody": "Hi %s Please verify the reset password token: %s",
     "resetPasswordEmailSubject": "Vidmicro - Reset password token",
     "emailVerificationTokenExpiry" : 360,
+    "googleLoginConfig": {
+        "clientID": "46831077427-drmohjlnm6ei3mt9j3cid0hi9u0hqn8p.apps.googleusercontent.com",
+        "clientSecret": "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",
+        "RedirectURL": "http://localhost:8080/api/googleCallback",
+        "scopes": ["https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email"]
+    },    
     "apis": {
         "/api/createSession":["GET"],
         "/api/signup":["POST"],
@@ -37,7 +43,9 @@
         "/api/editUser": ["POST"],
         "/api/verifyEmail": ["GET"],
         "/api/resetPassword": ["POST"],
-        "/api/verifyPasswordHash": ["POST"]
+        "/api/verifyPasswordHash": ["POST"],
+        "/api/googleCallback": ["GET"],
+        "/api/googleLogin": ["GET"]
     },
     "passwordTokenExpiry": 20,
     "sessionSecret": "*mongonormalcontrollers.SessionController",

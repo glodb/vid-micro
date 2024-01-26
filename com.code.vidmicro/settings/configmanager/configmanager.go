@@ -64,6 +64,7 @@ type config struct {
 	TitlesMetaPostfix            string                         `json:"titlesMetaPostfix"`
 	AllowedExtensions            map[string]bool                `json:"allowedExtensions"`
 	AllowedSizeInMbs             int                            `json:"allowedSizeInMbs"`
+	GoogleLoginConfig            configModels.GoogleLoginConfig `json:"googleLoginConfig"`
 	Acl                          map[string]map[string]*utilsdatatypes.Set
 	Apis                         map[string]*utilsdatatypes.Set
 	PasswordTokenExpiry          int64

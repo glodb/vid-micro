@@ -73,6 +73,7 @@ const (
 	TOKEN_ALREADY_SENT                       = 1058
 	TOKEN_AND_NEW_PASSWORD_REQUIRED          = 1059
 	TOKEN_VERIFICTION_SUCCESS                = 1060
+	GOOGLE_LOGIN_FAILED                      = 1061
 )
 
 type Responses struct {
@@ -155,7 +156,7 @@ func (u *Responses) InitResponses() {
 	u.responses[PASSWORD_MISMATCHED] = "Password mismatched"
 	u.responses[TOKEN_AND_NEW_PASSWORD_REQUIRED] = "Token and new password, both fields are required and should not be empty"
 	u.responses[TOKEN_VERIFICTION_SUCCESS] = "Password token verified successfully"
-
+	u.responses[GOOGLE_LOGIN_FAILED] = "GOOGLE_LOGIN_FAILED"
 }
 
 // GetResponse returns the message for the particular response code
