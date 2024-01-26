@@ -21,7 +21,8 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/emails"
-	settings "com.code.vidmicro/com.code.vidmicro/settings/googleloginconfig"
+	"com.code.vidmicro/com.code.vidmicro/settings/oauthconfig"
+	"com.code.vidmicro/com.code.vidmicro/settings/oauthconfig/services"
 	"com.code.vidmicro/com.code.vidmicro/settings/s3uploader"
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
 	"github.com/gin-gonic/gin"
@@ -189,7 +190,11 @@ func (u *UserController) handleVerifyEmail() gin.HandlerFunc {
 
 func (u *UserController) handleGoogleLogin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		configSet := settings.GetInstance()
+		configSet, err := oauthconfig.GetInstance().GetOAuth2Config(services.Google)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
 		url := configSet.AuthCodeURL("randomstate")
 		log.Println("Generated URL:", url)
 		c.Redirect(http.StatusSeeOther, url)
@@ -200,15 +205,20 @@ func (u *UserController) handleGoogleLogin() gin.HandlerFunc {
 func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		code := c.Query("code")
-		token, err := settings.GetInstance().Exchange(context.Background(), code)
+		configSet, err := oauthconfig.GetInstance().GetOAuth2Config(services.Google)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			return
+		}
+		token, err := configSet.Exchange(context.Background(), code)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
 			return
 		}
 
 		// 4. Exchange the token for user information
-		client := settings.GetInstance().Client(context.TODO(), token)
-		resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+		client := configSet.Client(context.TODO(), token)
+		resp, err := client.Get(configmanager.GetInstance().GoogleUserInfoLink)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
 			return
@@ -233,7 +243,7 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 			avatar_url = $3, 
 			is_verified = COALESCE(EXCLUDED.is_verified, users.is_verified);
 		`
-		userInfo["role"] = 2
+		userInfo["role"] = 20
 		// Execute the upsert query using RawQuery
 		err = u.RawQuery(u.GetDBName(), u.GetCollectionName(), upsertQuery, []interface{}{userInfo["email"], userInfo["name"], userInfo["name"], userInfo["picture"], userInfo["id"], true, userInfo["role"]}, true)
 		if err != nil {
@@ -306,8 +316,6 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 			session.IsVerified = user.IsVerified
 			session.Salt = user.Salt
 			session.Role = user.Role
-			session.CreatedAt = user.CreatedAt
-			session.UpdatedAt = user.UpdatedAt
 			session.UserId = int64(user.Id)
 			session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
 
@@ -317,7 +325,7 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 			// Respond with success message and tokens
 			c.AbortWithStatusJSON(http.StatusOK, gin.H{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "HTTPBasicAuth"})
 		} else {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, errors.New("User not found in database"), nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, errors.New("user not found in database"), nil))
 		}
 	}
 }

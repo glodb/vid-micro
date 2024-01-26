@@ -65,6 +65,7 @@ type config struct {
 	AllowedExtensions            map[string]bool                `json:"allowedExtensions"`
 	AllowedSizeInMbs             int                            `json:"allowedSizeInMbs"`
 	GoogleLoginConfig            configModels.GoogleLoginConfig `json:"googleLoginConfig"`
+	GoogleUserInfoLink           string                         `json:"googleUserInfoLink"`
 	Acl                          map[string]map[string]*utilsdatatypes.Set
 	Apis                         map[string]*utilsdatatypes.Set
 	PasswordTokenExpiry          int64
