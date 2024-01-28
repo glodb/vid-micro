@@ -330,8 +330,11 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 
 			cache.GetInstance().Set(sessionId, session.EncodeRedisData())
 
-			// Respond with success message and tokens
-			c.AbortWithStatusJSON(http.StatusOK, gin.H{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "HTTPBasicAuth"})
+			session.Salt = make([]byte, 0)
+			session.Token = ""
+			session.Password = ""
+			session.SessionId = ""
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]interface{}{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "Bearer", "user": session}))
 		} else {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, errors.New("user not found in database"), nil))
 		}
