@@ -35,7 +35,9 @@ func (u ContentTypeController) DoIndexing() error {
 	u.EnsureIndex(u.GetDBName(), u.GetCollectionName(), models.Contents{})
 
 	keys := cache.GetInstance().GetKeys("*" + configmanager.GetInstance().ContentTypePostfix)
-	cache.GetInstance().DelMany(keys)
+	if len(keys) > 0 {
+		cache.GetInstance().DelMany(keys)
+	}
 
 	rows, _ := u.Find(u.GetDBName(), u.GetCollectionName(), "", map[string]interface{}{}, &models.ContentType{}, false, "", false)
 

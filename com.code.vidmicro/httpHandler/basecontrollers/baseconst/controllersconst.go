@@ -16,4 +16,5 @@ const (
 	Content         = "Content"
 	TitleMeta       = "TitleMeta"
 	RefreshToken    = "RefreshToken"
+	UsersSessions   = "UsersSessions"
 )

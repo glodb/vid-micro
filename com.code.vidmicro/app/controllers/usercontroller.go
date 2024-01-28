@@ -189,7 +189,12 @@ func (u *UserController) handleGoogleLogin() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
-		url := configSet.AuthCodeURL("randomstate")
+
+		sessionId := ""
+		if val, ok := c.Get("session-id"); ok {
+			sessionId = val.(string)
+		}
+		url := configSet.AuthCodeURL(sessionId)
 		log.Println("Generated URL:", url)
 		c.Redirect(http.StatusSeeOther, url)
 	}
@@ -199,6 +204,17 @@ func (u *UserController) handleGoogleLogin() gin.HandlerFunc {
 func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		code := c.Query("code")
+		sessionId := c.Request.FormValue("state")
+
+		var session models.Session
+		data, err := cache.GetInstance().Get(sessionId)
+		if err != nil || len(data) == 0 {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		} else {
+			session.DecodeRedisData(data)
+		}
+
 		configSet, err := oauthconfig.GetInstance().GetOAuth2Config(services.Google)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -297,13 +313,6 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 				return
 			}
 
-			// Create session
-			var session models.Session
-			sessionId, err := utils.GenerateUUID() // You can replace this with your session ID generation logic
-			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
-				return
-			}
 			session.Username = user.Username
 			session.Token = jwtToken
 			session.Name = user.Name
@@ -315,7 +324,10 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 			session.UserId = int64(user.Id)
 			session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
 
-			cache.GetInstance().SAdd([]interface{}{strconv.FormatInt(int64(user.Id), 10) + "_all_sessions", sessionId})
+			userSessionsController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
+			sessionQuery := "UPDATE " + string(userSessionsController.GetCollectionName()) + " SET user_id = $1 WHERE session_id = $2"
+			userSessionsController.UpdateOne(userSessionsController.GetDBName(), userSessionsController.GetCollectionName(), sessionQuery, []interface{}{user.Id, session.SessionId}, false)
+
 			cache.GetInstance().Set(sessionId, session.EncodeRedisData())
 
 			// Respond with success message and tokens
@@ -417,7 +429,9 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 				session.UserId = int64(user.Id)
 				session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
 
-				err = cache.GetInstance().SAdd([]interface{}{strconv.FormatInt(int64(user.Id), 10) + "_all_sessions", sessionId})
+				userSessionsController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
+				sessionQuery := "UPDATE " + string(userSessionsController.GetCollectionName()) + " SET user_id = $1 WHERE session_id = $2"
+				userSessionsController.UpdateOne(userSessionsController.GetDBName(), userSessionsController.GetCollectionName(), sessionQuery, []interface{}{user.Id, session.SessionId}, false)
 
 				if err != nil {
 					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -431,7 +445,11 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 					return
 				}
 
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]string{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "Bearer"}))
+				session.Salt = make([]byte, 0)
+				session.Token = ""
+				session.Password = ""
+				session.SessionId = ""
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]interface{}{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "Bearer", "user": session}))
 
 			} else {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.PASSWORD_MISMATCHED, err, nil))
@@ -534,9 +552,23 @@ func (u *UserController) handleBlackListUser() gin.HandlerFunc {
 			return
 		}
 
-		sessions := cache.GetInstance().SMembers(strconv.FormatInt(int64(modelUser.Id), 10) + "_all_sessions")
+		userSessionsController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
+		rows, err := userSessionsController.Find(userSessionsController.GetDBName(), userSessionsController.GetCollectionName(), " session_id", map[string]interface{}{"user_id": modelUser.Id}, &models.UserSessions{}, false, "", false)
 
-		for _, sessionId := range sessions {
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
+
+		defer rows.Close()
+
+		var sessionId string
+		for rows.Next() {
+			err := rows.Scan(&sessionId)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+				return
+			}
 			data, err := cache.GetInstance().Get(sessionId)
 			if err == nil || len(data) != 0 {
 				var session models.Session
@@ -787,6 +819,6 @@ func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/verifyEmail/:token", u.handleVerifyEmail())
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/resetPassword", u.handleResetPassword())
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/verifyPasswordHash", u.handleVerifyPasswordHash())
-	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/googleLogin", u.handleGoogleLogin())
+	baserouter.GetInstance().GetOpenRouter().GET("/api/googleLogin", u.handleGoogleLogin())
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/googleCallback", u.handleGoogleCallback())
 }

@@ -2,9 +2,6 @@ package models
 
 import "time"
 
-//TODO: Put refresh token in database
-//TODO: Put sessions in database
-
 type User struct {
 	Id                int       `db:"id SERIAL PRIMARY KEY" form:"id"`
 	Username          string    `db:"username VARCHAR(255) NOT NULL UNIQUE" json:"username" form:"username"`

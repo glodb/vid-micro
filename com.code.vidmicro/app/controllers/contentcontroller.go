@@ -140,7 +140,9 @@ func (u *ContentController) handleCreateContent() gin.HandlerFunc {
 			}
 		}
 		keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%d%s%s", modelContent.AssociatedTitle, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentPostFix))
-		cache.GetInstance().DelMany(keys)
+		if len(keys) > 0 {
+			cache.GetInstance().DelMany(keys)
+		}
 
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, nil))
 	}
@@ -391,7 +393,9 @@ func (u *ContentController) handleUpdateContent() gin.HandlerFunc {
 				return
 			}
 			keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%d%s%s", modelContent.AssociatedTitle, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentPostFix))
-			cache.GetInstance().DelMany(keys)
+			if len(keys) > 0 {
+				cache.GetInstance().DelMany(keys)
+			}
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
 			return
 		}
@@ -421,7 +425,9 @@ func (u *ContentController) handleDeleteContent() gin.HandlerFunc {
 			return
 		}
 		keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%d%s%s", modelContent.AssociatedTitle, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentPostFix))
-		cache.GetInstance().DelMany(keys)
+		if len(keys) > 0 {
+			cache.GetInstance().DelMany(keys)
+		}
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_SUCCESS, err, nil))
 	}
 }

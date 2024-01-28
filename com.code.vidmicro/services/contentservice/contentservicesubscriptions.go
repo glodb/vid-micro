@@ -84,7 +84,9 @@ func (ts ContentServiceSubscriptions) HandleLanguageDeleted(msg *nats.Msg) {
 		languageController.DeleteLanguage(langData)
 
 		keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%s", configmanager.GetInstance().ContentPostFix))
-		cache.GetInstance().DelMany(keys)
+		if len(keys) > 0 {
+			cache.GetInstance().DelMany(keys)
+		}
 
 		cache.GetInstance().Del(fmt.Sprintf("%d%s%s", langData.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix))
 	}
@@ -106,7 +108,9 @@ func (ts ContentServiceSubscriptions) HandleTitleCreated(msg *nats.Msg) {
 		pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesContentPostfix
 
 		keys := cache.GetInstance().GetKeys(pattern)
-		cache.GetInstance().DelMany(keys)
+		if len(keys) > 0 {
+			cache.GetInstance().DelMany(keys)
+		}
 	}
 }
 
@@ -126,7 +130,9 @@ func (ts ContentServiceSubscriptions) HandleTitleUpdated(msg *nats.Msg) {
 		pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesContentPostfix
 
 		keys := cache.GetInstance().GetKeys(pattern)
-		cache.GetInstance().DelMany(keys)
+		if len(keys) > 0 {
+			cache.GetInstance().DelMany(keys)
+		}
 
 		key := "1" + fmt.Sprintf("%d", titleData.Id) +
 			configmanager.GetInstance().RedisSeprator +
@@ -157,12 +163,16 @@ func (ts ContentServiceSubscriptions) HandleTitleDeleted(msg *nats.Msg) {
 		contentController.DeleteOne(contentController.GetDBName(), contentController.GetCollectionName(), condition, false, false)
 
 		keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%s%s", configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentPostFix))
-		cache.GetInstance().DelMany(keys)
+		if len(keys) > 0 {
+			cache.GetInstance().DelMany(keys)
+		}
 
 		pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesContentPostfix
 
 		keys = cache.GetInstance().GetKeys(pattern)
-		cache.GetInstance().DelMany(keys)
+		if len(keys) > 0 {
+			cache.GetInstance().DelMany(keys)
+		}
 
 		key := "1" + fmt.Sprintf("%d", titleData.Id) +
 			configmanager.GetInstance().RedisSeprator +

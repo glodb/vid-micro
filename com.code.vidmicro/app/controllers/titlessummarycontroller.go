@@ -63,7 +63,9 @@ func (u *TitlesSummaryController) DeleteTitleLanguage(languageMeta models.Langua
 	contentController.DeleteOne(contentController.GetDBName(), contentController.GetCollectionName(), map[string]interface{}{"associated_title": languageMeta.TitlesId, "language_id": languageMeta.LanguageId}, false, false)
 
 	keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%d%s%s", languageMeta.TitlesId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentPostFix))
-	cache.GetInstance().DelMany(keys)
+	if len(keys) > 0 {
+		cache.GetInstance().DelMany(keys)
+	}
 }
 
 func (u *TitlesSummaryController) handleGetTitles() gin.HandlerFunc {

@@ -53,7 +53,6 @@ func (u *TitlesController) SetBaseFunctions(inter basefunctions.BaseFucntionsInt
 
 func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// TODO: Save the data in meilisearch
 		modelTitles := models.Titles{}
 		if err := c.ShouldBind(&modelTitles); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
@@ -170,7 +169,9 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 		pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesPostfix
 
 		keys := cache.GetInstance().GetKeys(pattern)
-		cache.GetInstance().DelMany(keys)
+		if len(keys) > 0 {
+			cache.GetInstance().DelMany(keys)
+		}
 
 		tempMeiliTitle := models.MeilisearchTitle{
 			Id:               modelTitles.Id,
@@ -425,7 +426,9 @@ func (u *TitlesController) handleUpdateTitles() gin.HandlerFunc {
 			pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesPostfix
 
 			keys := cache.GetInstance().GetKeys(pattern)
-			cache.GetInstance().DelMany(keys)
+			if len(keys) > 0 {
+				cache.GetInstance().DelMany(keys)
+			}
 
 			key := "1" + configmanager.GetInstance().RedisSeprator +
 				fmt.Sprintf("%d", modelTitles.Id) +
@@ -501,10 +504,20 @@ func (u *TitlesController) handleDeleteTitles() gin.HandlerFunc {
 			return
 		}
 
+		titleMetaController, _ := u.BaseControllerFactory.GetController(baseconst.TitleMeta)
+		err = titleMetaController.DeleteOne(titleMetaController.GetDBName(), titleMetaController.GetCollectionName(), map[string]interface{}{"title_id": modelTitles.Id}, false, false)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
+
 		pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesPostfix
 
 		keys := cache.GetInstance().GetKeys(pattern)
-		cache.GetInstance().DelMany(keys)
+		if len(keys) > 0 {
+			cache.GetInstance().DelMany(keys)
+		}
 
 		key := "1" + configmanager.GetInstance().RedisSeprator +
 			fmt.Sprintf("%d", modelTitles.Id) +
