@@ -42,5 +42,6 @@
 		".jpeg": true,
 		".png":  true
     },
-    "allowedSizeInMbs": 10
+    "allowedSizeInMbs": 10,
+    "writeError": true
 }

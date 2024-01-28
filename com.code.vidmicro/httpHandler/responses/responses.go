@@ -3,17 +3,17 @@ package responses
 import (
 	"io/ioutil"
 	"log"
-	"net/http"
 	"sync"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
+	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 )
 
 const (
 	WELCOME_TO_SSO                           = 1000
-	API_NOT_AVAILABLE                        = 1001
+	NOT_FOUND                                = 1001
 	OPTIONS_NOT_ALLOWED                      = 1002
 	CREATE_SESSION_SUCCESS                   = 1003
 	GENERATING_UUID_FAILED                   = 1004
@@ -22,7 +22,7 @@ const (
 	SESSION_NOT_VALID                        = 1007
 	CREATE_SESSION_FAILED                    = 1008
 	MALFORMED_JSON                           = 1009
-	VALIDATION_FAILED                        = 1010
+	SERVER_ERROR                             = 1010
 	DB_ERROR                                 = 1011
 	CREATE_HASH_FAILED                       = 1012
 	BASIC_AUTH_FAILED                        = 1013
@@ -74,6 +74,8 @@ const (
 	TOKEN_AND_NEW_PASSWORD_REQUIRED          = 1059
 	TOKEN_VERIFICTION_SUCCESS                = 1060
 	GOOGLE_LOGIN_FAILED                      = 1061
+	FORBIDDEN                                = 1062
+	BAD_REQUEST                              = 1063
 )
 
 type Responses struct {
@@ -98,8 +100,8 @@ func GetInstance() *Responses {
 // InitResponses function just initialise the response headers to be sent
 func (u *Responses) InitResponses() {
 	u.responses = make(map[int]string)
-	u.responses[WELCOME_TO_SSO] = "Welcome to SSO"
-	u.responses[API_NOT_AVAILABLE] = "The Api is not available on current server"
+	u.responses[WELCOME_TO_SSO] = "Welcome to VidMicro"
+	u.responses[NOT_FOUND] = "The Api is not available on current server"
 	u.responses[OPTIONS_NOT_ALLOWED] = "Options are not allowed"
 	u.responses[CREATE_SESSION_SUCCESS] = "Creating session successful"
 	u.responses[GENERATING_UUID_FAILED] = "Generating UUID failed"
@@ -107,7 +109,7 @@ func (u *Responses) InitResponses() {
 	u.responses[SESSION_NOT_VALID] = "Session not valid"
 	u.responses[REGISTER_USER_SUCCESS] = "Register user success"
 	u.responses[MALFORMED_JSON] = "Json Decoding failed"
-	u.responses[VALIDATION_FAILED] = "Validation failed"
+	u.responses[SERVER_ERROR] = "Server Error"
 	u.responses[DB_ERROR] = "DB Error in query"
 	u.responses[CREATE_HASH_FAILED] = "Failed creating hash"
 	u.responses[BASIC_AUTH_FAILED] = "Basic auth failed"
@@ -157,6 +159,8 @@ func (u *Responses) InitResponses() {
 	u.responses[TOKEN_AND_NEW_PASSWORD_REQUIRED] = "Token and new password, both fields are required and should not be empty"
 	u.responses[TOKEN_VERIFICTION_SUCCESS] = "Password token verified successfully"
 	u.responses[GOOGLE_LOGIN_FAILED] = "GOOGLE_LOGIN_FAILED"
+	u.responses[FORBIDDEN] = "FORBIDDEN"
+	u.responses[BAD_REQUEST] = "BAD_REQUEST"
 }
 
 // GetResponse returns the message for the particular response code
@@ -193,9 +197,12 @@ func (u *Responses) WriteResponse(c *gin.Context, code int, err error, data inte
 	}
 
 	if err != nil {
-		returnMap["error"] = err.Error()
+		if configmanager.GetInstance().WriteError {
+			returnMap["error"] = err.Error()
+		}
 		auditTrial.Error = err.Error()
 	}
+
 	if data != nil {
 		returnMap["data"] = data
 		dataBytes, _ := sonic.Marshal(data)
@@ -205,53 +212,53 @@ func (u *Responses) WriteResponse(c *gin.Context, code int, err error, data inte
 	return returnMap
 }
 
-func (u *Responses) WriteJsonResponse(w http.ResponseWriter, r *http.Request, code int, err error, data interface{}) {
-	// urlPath := r.URL
-	returnMap := u.getResponse(code)
+// func (u *Responses) WriteJsonResponse(w http.ResponseWriter, r *http.Request, code int, err error, data interface{}) {
+// 	// urlPath := r.URL
+// 	returnMap := u.getResponse(code)
 
-	jsonData, _ := ioutil.ReadAll(r.Body)
-	session := models.Session{}
-	sessionValue := r.Context().Value("session")
+// 	jsonData, _ := ioutil.ReadAll(r.Body)
+// 	session := models.Session{}
+// 	sessionValue := r.Context().Value("session")
 
-	if sessionValue != nil {
-		session = sessionValue.(models.Session)
-	}
-	auditTrial := models.AuditTrial{
-		Body:    string(jsonData),
-		Url:     r.URL.String(),
-		Code:    returnMap["code"].(int),
-		Message: returnMap["message"].(string),
-		Session: session.SessionId,
-		Email:   session.Email,
-		Method:  r.Method,
-		IP:      r.RemoteAddr,
-	}
+// 	if sessionValue != nil {
+// 		session = sessionValue.(models.Session)
+// 	}
+// 	auditTrial := models.AuditTrial{
+// 		Body:    string(jsonData),
+// 		Url:     r.URL.String(),
+// 		Code:    returnMap["code"].(int),
+// 		Message: returnMap["message"].(string),
+// 		Session: session.SessionId,
+// 		Email:   session.Email,
+// 		Method:  r.Method,
+// 		IP:      r.RemoteAddr,
+// 	}
 
-	status := http.StatusOK
-	if err != nil {
-		status = http.StatusNotAcceptable
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
+// 	status := http.StatusOK
+// 	if err != nil {
+// 		status = http.StatusNotAcceptable
+// 	}
+// 	w.Header().Set("Content-Type", "application/json")
+// 	w.Header().Set("Cache-Control", "no-store")
 
-	w.WriteHeader(status)
+// 	w.WriteHeader(status)
 
-	if err != nil {
-		returnMap["error"] = err.Error()
-		auditTrial.Error = err.Error()
-		status = http.StatusNotModified
-	}
+// 	if err != nil {
+// 		returnMap["error"] = err.Error()
+// 		auditTrial.Error = err.Error()
+// 		status = http.StatusNotModified
+// 	}
 
-	if data != nil {
-		returnMap["data"] = data
-		dataBytes, _ := sonic.Marshal(data)
-		auditTrial.Response = string(dataBytes)
-	}
-	err = sonic.ConfigDefault.NewEncoder(w).Encode(returnMap)
-	if err != nil {
-		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
-		return
-	}
+// 	if data != nil {
+// 		returnMap["data"] = data
+// 		dataBytes, _ := sonic.Marshal(data)
+// 		auditTrial.Response = string(dataBytes)
+// 	}
+// 	err = sonic.ConfigDefault.NewEncoder(w).Encode(returnMap)
+// 	if err != nil {
+// 		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
+// 		return
+// 	}
 
-	log.Println("auditLogs:", auditTrial)
-}
+// 	log.Println("auditLogs:", auditTrial)
+// }

@@ -83,6 +83,8 @@ func (c *controllersObject) registerControllers(key string, registerApis bool) {
 		c.controllers[key] = &controllers.ContentController{BaseControllerFactory: c, ValidatorInterface: &validators.ContentValidator{}}
 	case baseconst.TitleMeta:
 		c.controllers[key] = &controllers.TitleMetaController{BaseControllerFactory: c, ValidatorInterface: &validators.TitleMetaValidator{}}
+	case baseconst.RefreshToken:
+		c.controllers[key] = &controllers.RefreshTokensController{BaseControllerFactory: c, ValidatorInterface: &validators.RefreshTokensValidator{}}
 	}
 	funcs, _ := basefunctions.GetInstance().GetFunctions(basetypes.PSQL, c.controllers[key].GetDBName())
 	c.controllers[key].SetBaseFunctions(*funcs)

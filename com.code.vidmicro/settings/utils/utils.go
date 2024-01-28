@@ -1,14 +1,12 @@
 package utils
 
 import (
-	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/golang-jwt/jwt/v5"
 	"io"
 	"math"
 	"net/http"
@@ -16,6 +14,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
+	"github.com/golang-jwt/jwt/v5"
 
 	"com.code.vidmicro/com.code.vidmicro/settings/utilsdatatypes"
 )
@@ -46,6 +47,15 @@ func GenerateUUID() (string, error) {
 			"%x-%x-%x-%x-%x",
 			uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:]),
 		nil
+}
+
+func GenerateUUIDBytes() []byte {
+	uuid := make([]byte, 16)
+	rand.Read(uuid)
+	// Set the version (4) and variant (RFC4122) bits
+	uuid[6] = (uuid[6] & 0x0f) | 0x40
+	uuid[8] = (uuid[8] & 0x3f) | 0x80
+	return uuid
 }
 
 func GenerateSalt() ([]byte, error) {

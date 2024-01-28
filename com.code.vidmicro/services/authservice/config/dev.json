@@ -66,5 +66,6 @@
         }
     },
     "sessionExpirySeconds":6000000,
-    "PasswordTokenExpiry": 20
+    "PasswordTokenExpiry": 20,
+    "googleUserInfoLink" : "https://www.googleapis.com/oauth2/v2/userinfo"
 }

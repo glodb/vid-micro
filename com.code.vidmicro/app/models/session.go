@@ -25,6 +25,8 @@ type Session struct {
 	Role         int    `json:"role,omitempty"`
 	RoleName     string `json:"roleName,omitempty"`
 	LastActivity int64  `json:"lastActivity,omitempty"`
+	CreatedAt    int64  `json:"createdAt,omitempty"`
+	ExpiringAt   int64  `json:"expiringAt",omitempty`
 }
 
 func (ts *Session) EncodeRedisData() []byte {

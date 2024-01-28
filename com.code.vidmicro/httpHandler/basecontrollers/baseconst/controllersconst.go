@@ -15,4 +15,5 @@ const (
 	ContentType     = "ContentType"
 	Content         = "Content"
 	TitleMeta       = "TitleMeta"
+	RefreshToken    = "RefreshToken"
 )

@@ -94,13 +94,13 @@ func (u *ContentController) handleCreateContent() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelContent := models.Contents{}
 		if err := c.ShouldBind(&modelContent); err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/put", modelContent)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -112,30 +112,30 @@ func (u *ContentController) handleCreateContent() gin.HandlerFunc {
 		statusExist, err := cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelContent.TypeId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix))
 
 		if !statusExist {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("status id is not correct"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("status id is not correct"), nil))
 			return
 		}
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
 		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelContent, true)
 		modelContent.Id = int(id)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
 		file, err := c.FormFile("image")
 
 		if err == nil && file != nil {
-			url, err := s3uploader.GetInstance().UploadToSCW(file)
+			url, httpCode, err := s3uploader.GetInstance().UploadToSCW(file)
 			if err == nil {
 				modelContent.Thumbnail = url
 			} else {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
+				c.AbortWithStatusJSON(httpCode, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
 				return
 			}
 		}
@@ -190,7 +190,7 @@ func (u *ContentController) handleGetContent() gin.HandlerFunc {
 		err := u.Validate(c.GetString("apiPath")+"/get", modelContent)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -221,7 +221,7 @@ func (u *ContentController) handleGetContent() gin.HandlerFunc {
 		rows, count, err := u.Paginate(u.GetDBName(), u.GetCollectionName(), "", query, &modelContent, false, "", false, int(pageSize), int(page))
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		defer rows.Close()
@@ -235,19 +235,30 @@ func (u *ContentController) handleGetContent() gin.HandlerFunc {
 			// Scan the row's values into the User struct.
 			err := rows.Scan(&tempContent.Id, &tempContent.Name, &tempContent.AlternativeName, &tempContent.Thumbnail, &tempContent.Description, &tempContent.TypeId, &tempContent.LanguageId, &tempContent.AssociatedTitle)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 
 			contentTypeData, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", tempContent.TypeId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix))
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+				return
+			}
+
+			if len(contentTypeData) <= 0 {
+				c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("content data is not available"), nil))
 				return
 			}
 
 			languageTypeData, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", tempContent.LanguageId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix))
+
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+				return
+			}
+
+			if len(languageTypeData) <= 0 {
+				c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("languae data is not available"), nil))
 				return
 			}
 
@@ -269,7 +280,7 @@ func (u *ContentController) handleGetContent() gin.HandlerFunc {
 
 		err = cache.GetInstance().Set(key, pr.EncodeRedisData())
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, pr))
@@ -283,27 +294,27 @@ func (u *ContentController) handleUpdateContent() gin.HandlerFunc {
 		data := make([]interface{}, 0)
 		modelContent := models.Contents{}
 		if err := c.ShouldBind(&modelContent); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/post", modelContent)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		file, err := c.FormFile("image")
 
 		if err == nil && file != nil {
-			url, err := s3uploader.GetInstance().UploadToSCW(file)
+			url, httpCode, err := s3uploader.GetInstance().UploadToSCW(file)
 			if err == nil {
 				modelContent.Thumbnail = url
 				setPart += "thumbnail = $1"
 				data = append(data, url)
 
 			} else {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
+				c.AbortWithStatusJSON(httpCode, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
 				return
 			}
 		}
@@ -338,7 +349,7 @@ func (u *ContentController) handleUpdateContent() gin.HandlerFunc {
 		if modelContent.TypeId >= 0 {
 			typeExist, err := cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelContent.TypeId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix))
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 			if typeExist {
@@ -349,7 +360,7 @@ func (u *ContentController) handleUpdateContent() gin.HandlerFunc {
 				setPart += "type_id = $" + lengthString
 				data = append(data, modelContent.TypeId)
 			} else {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("one of the type doesn't exists"), nil))
+				c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("one of the type doesn't exists"), nil))
 				return
 			}
 		}
@@ -376,7 +387,7 @@ func (u *ContentController) handleUpdateContent() gin.HandlerFunc {
 
 			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+setPart, data, false)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_UPDATING_USER, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 			keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%d%s%s", modelContent.AssociatedTitle, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentPostFix))
@@ -393,20 +404,20 @@ func (u *ContentController) handleDeleteContent() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelContent := models.Contents{}
 		if err := c.ShouldBind(&modelContent); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/delete", modelContent)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelContent.Id}, false, false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%d%s%s", modelContent.AssociatedTitle, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentPostFix))

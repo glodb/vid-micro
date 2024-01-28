@@ -17,7 +17,7 @@ func (u *ApiMiddleware) GetHandlerFunc() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		splittedString := strings.Split(c.Request.URL.Path, "/")
 		if len(splittedString) < 3 {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.API_NOT_AVAILABLE, nil, nil))
+			c.AbortWithStatusJSON(http.StatusNotFound, responses.GetInstance().WriteResponse(c, responses.NOT_FOUND, nil, nil))
 			return
 		}
 		urlPath := "/" + splittedString[1] + "/" + splittedString[2]
@@ -29,11 +29,11 @@ func (u *ApiMiddleware) GetHandlerFunc() gin.HandlerFunc {
 				c.Set("apiPath", urlPath)
 				c.Next()
 			} else {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.METHOD_NOT_AVAILABLE, nil, nil))
+				c.AbortWithStatusJSON(http.StatusMethodNotAllowed, responses.GetInstance().WriteResponse(c, responses.METHOD_NOT_AVAILABLE, nil, nil))
 				return
 			}
 		} else {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.API_NOT_AVAILABLE, nil, nil))
+			c.AbortWithStatusJSON(http.StatusNotFound, responses.GetInstance().WriteResponse(c, responses.NOT_FOUND, nil, nil))
 			return
 		}
 	}

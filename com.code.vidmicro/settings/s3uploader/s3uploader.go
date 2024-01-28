@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"mime/multipart"
+	"net/http"
 	"path/filepath"
 	"sync"
 
@@ -29,16 +30,16 @@ func GetInstance() *S3Uploader {
 	return instance
 }
 
-func (u *S3Uploader) UploadToSCW(fileHeader *multipart.FileHeader) (string, error) {
+func (u *S3Uploader) UploadToSCW(fileHeader *multipart.FileHeader) (string, int, error) {
 
 	ext := filepath.Ext(fileHeader.Filename)
 
 	if !configmanager.GetInstance().AllowedExtensions[ext] {
-		return "", errors.New("the image extension is not allowed")
+		return "", http.StatusUnsupportedMediaType, errors.New("the image extension is not allowed")
 	}
 
 	if fileHeader.Size > (int64(configmanager.GetInstance().AllowedSizeInMbs) * 1 << 20) {
-		return "", errors.New("file too big")
+		return "", http.StatusRequestEntityTooLarge, errors.New("file too big")
 	}
 
 	ctx := context.Background()
@@ -48,12 +49,12 @@ func (u *S3Uploader) UploadToSCW(fileHeader *multipart.FileHeader) (string, erro
 		Secure: true,
 	})
 	if err != nil {
-		return "", err
+		return "", http.StatusInternalServerError, err
 	}
 
 	file, err := fileHeader.Open()
 	if err != nil {
-		return "", err
+		return "", http.StatusInternalServerError, err
 	}
 	defer file.Close()
 
@@ -64,9 +65,9 @@ func (u *S3Uploader) UploadToSCW(fileHeader *multipart.FileHeader) (string, erro
 		ContentType: "application/octet-stream",
 	})
 	if err != nil {
-		return "", err
+		return "", http.StatusInternalServerError, err
 	}
 
 	link := fmt.Sprintf("https://%s/%s/%s", configmanager.GetInstance().S3Settings.EndPoint, configmanager.GetInstance().S3Settings.Bucket, objectName)
-	return link, nil
+	return link, http.StatusOK, nil
 }

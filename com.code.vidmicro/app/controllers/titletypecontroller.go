@@ -57,18 +57,18 @@ func (u TitleTypeController) DoIndexing() error {
 	return nil
 }
 
-func (u *TitleTypeController) GetTitleType(id int) (models.TitleType, error) {
+func (u *TitleTypeController) GetTitleType(id int) (models.TitleType, int, error) {
 	data, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TypePostfix))
 	if err != nil {
-		return models.TitleType{}, err
+		return models.TitleType{}, http.StatusInternalServerError, err
 	}
 	if len(data) <= 0 {
-		return models.TitleType{}, errors.New("record not available")
+		return models.TitleType{}, http.StatusBadRequest, errors.New("record not available")
 	}
 	titleType := models.TitleType{}
 	titleType.DecodeRedisData(data)
 
-	return titleType, nil
+	return titleType, http.StatusOK, nil
 }
 
 func (u *TitleTypeController) SetBaseFunctions(inter basefunctions.BaseFucntionsInterface) {
@@ -79,25 +79,25 @@ func (u *TitleTypeController) handleCreateTitleType() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelTitleType := models.TitleType{}
 		if err := c.ShouldBind(&modelTitleType); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadGateway, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/put", modelTitleType)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelTitleType, true)
 		modelTitleType.Id = int(id)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		err = cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelTitleType.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TypePostfix), modelTitleType.EncodeRedisData())
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -113,7 +113,7 @@ func (u *TitleTypeController) handleGetTitleType() gin.HandlerFunc {
 
 		err := u.Validate(c.GetString("apiPath")+"/get", modelTitleType)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -126,7 +126,7 @@ func (u *TitleTypeController) handleGetTitleType() gin.HandlerFunc {
 		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "", query, &modelTitleType, false, "", false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		defer rows.Close()
@@ -141,7 +141,7 @@ func (u *TitleTypeController) handleGetTitleType() gin.HandlerFunc {
 			// Scan the row's values into the User struct.
 			err := rows.Scan(&tempTitleType.Id, &tempTitleType.Name, &tempTitleType.Slug)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 
@@ -155,26 +155,26 @@ func (u *TitleTypeController) handleUpdateTitleType() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelTitleType := models.TitleType{}
 		if err := c.ShouldBind(&modelTitleType); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/post", modelTitleType)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1, slug = $2 WHERE id = $3", []interface{}{modelTitleType.Name, modelTitleType.Slug, modelTitleType.Id}, false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		err = cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelTitleType.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TypePostfix), modelTitleType.EncodeRedisData())
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -186,20 +186,20 @@ func (u *TitleTypeController) handleDeleteTitleType() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelTitleType := models.TitleType{}
 		if err := c.ShouldBind(&modelTitleType); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/post", modelTitleType)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelTitleType.Id}, false, false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		cache.GetInstance().Del(fmt.Sprintf("%d%s%s", modelTitleType.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TypePostfix))

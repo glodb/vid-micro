@@ -97,7 +97,10 @@ func (u *PSqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.Co
 	}
 
 	query += "(" + strings.Join(columns, ", ") + ")"
-	query += " VALUES(" + strings.Join(placeholders, ", ") + ") RETURNING id"
+	query += " VALUES(" + strings.Join(placeholders, ", ") + ")"
+	if scan {
+		query += " RETURNING id"
+	}
 
 	var insertedID int64
 	row := conn.QueryRow(
@@ -333,10 +336,10 @@ func (u *PSqlFunctions) UpdateOne(dbName basetypes.DBName, collectionName basety
 	return err
 }
 
-func (u *PSqlFunctions) RawQuery(dbName basetypes.DBName, collectionName basetypes.CollectionName, query string, data []interface{}, upsert bool) error {
+func (u *PSqlFunctions) RawQuery(dbName basetypes.DBName, collectionName basetypes.CollectionName, query string, data []interface{}) (*sql.Rows, error) {
 	conn := baseconnections.GetInstance().GetConnection(basetypes.PSQL).GetDB(basetypes.PSQL).(*sql.DB)
-	_, err := conn.Exec(query, data...)
-	return err
+	rows, err := conn.Query(query, data...)
+	return rows, err
 }
 
 func (u *PSqlFunctions) DeleteOne(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}, useOr bool, addParenthesis bool) error {

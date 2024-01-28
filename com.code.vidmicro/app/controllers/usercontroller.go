@@ -14,6 +14,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/app/models"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
+	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseconst"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseinterfaces"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/baserouter"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basevalidators"
@@ -27,7 +28,6 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/rs/xid"
 )
 
 type UserController struct {
@@ -48,12 +48,6 @@ func (u *UserController) generateJWT(minutes int64) (string, error) {
 	}
 
 	return tokenString, nil
-}
-
-func (u *UserController) generateRefreshToken() (string, error) {
-	// Generate a random refresh token (you may use a library for better randomness)
-	newXID := xid.New()
-	return string(newXID.String()), nil
 }
 
 func (u *UserController) GetDBName() basetypes.DBName {
@@ -77,25 +71,25 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelUser := models.User{}
 		if err := c.ShouldBind(&modelUser); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		file, err := c.FormFile("image")
 
 		if err == nil && file != nil {
-			url, err := s3uploader.GetInstance().UploadToSCW(file)
+			url, statusCode, err := s3uploader.GetInstance().UploadToSCW(file)
 			if err == nil {
 				modelUser.AvatarUrl = url
 			} else {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
+				c.AbortWithStatusJSON(statusCode, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
 				return
 			}
 		}
 
 		err = u.Validate(c.GetString("apiPath"), modelUser)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -107,7 +101,7 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 
 		modelUser.Salt, err = utils.GenerateSalt()
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		modelUser.Role = 1
@@ -117,13 +111,13 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 		modelUser.VerificationToken = verificationToken
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_HASH_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		_, err = u.Add(u.GetDBName(), u.GetCollectionName(), modelUser, true)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_HASH_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -132,7 +126,7 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 
 		err = emails.GetInstance().SendVerificationEmail(modelUser.Email, configmanager.GetInstance().EmailSubject, emailBody)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.SEND_VERIFICATION_EMAIL_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -144,7 +138,7 @@ func (u *UserController) handleVerifyEmail() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		emailVerificationToken := c.Param("token")
 		if emailVerificationToken == "" {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_EMAIL_OR_TOKEN, nil, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.INVALID_EMAIL_OR_TOKEN, nil, nil))
 			return
 		}
 
@@ -157,7 +151,7 @@ func (u *UserController) handleVerifyEmail() gin.HandlerFunc {
 
 		// Check for errors during token parsing
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_EMAIL_OR_TOKEN, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -168,14 +162,14 @@ func (u *UserController) handleVerifyEmail() gin.HandlerFunc {
 			expirationTime := time.Now().Add(expirationDuration)
 			if time.Now().After(expirationTime) {
 				// Token has expired
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_EXPIRED, nil, nil))
+				c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.TOKEN_EXPIRED, nil, nil))
 				return
 			}
 
 			// If the tokens match, update the user's isVerified flag in the database
 			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET is_verified = true, verification_token = '' WHERE verification_token = $1", []interface{}{emailVerificationToken}, false)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.EMAIL_VERIFICATION_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 
@@ -183,7 +177,7 @@ func (u *UserController) handleVerifyEmail() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.EMAIL_VERIFICATION_SUCCESS, nil, nil))
 		} else {
 			// Token is invalid
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_EMAIL_OR_TOKEN, nil, nil))
+			c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.INVALID_EMAIL_OR_TOKEN, nil, nil))
 		}
 	}
 }
@@ -192,7 +186,7 @@ func (u *UserController) handleGoogleLogin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		configSet, err := oauthconfig.GetInstance().GetOAuth2Config(services.Google)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		url := configSet.AuthCodeURL("randomstate")
@@ -207,7 +201,7 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 		code := c.Query("code")
 		configSet, err := oauthconfig.GetInstance().GetOAuth2Config(services.Google)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		token, err := configSet.Exchange(context.Background(), code)
@@ -245,7 +239,7 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 		`
 		userInfo["role"] = 20
 		// Execute the upsert query using RawQuery
-		err = u.RawQuery(u.GetDBName(), u.GetCollectionName(), upsertQuery, []interface{}{userInfo["email"], userInfo["name"], userInfo["name"], userInfo["picture"], userInfo["id"], true, userInfo["role"]}, true)
+		_, err = u.RawQuery(u.GetDBName(), u.GetCollectionName(), upsertQuery, []interface{}{userInfo["email"], userInfo["name"], userInfo["name"], userInfo["picture"], userInfo["id"], true, userInfo["role"]})
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
 			return
@@ -295,7 +289,9 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 			}
 
 			// Generate Refresh Token
-			refreshToken, err := u.generateRefreshToken()
+			controller, _ := u.BaseControllerFactory.GetController(baseconst.RefreshToken)
+			refreshTokenController := controller.(*RefreshTokensController)
+			refreshToken, err := refreshTokenController.GetRefreshToken(user.Id)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
 				return
@@ -334,20 +330,20 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelUser := models.User{}
 		if err := c.ShouldBindJSON(&modelUser); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath"), modelUser)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadGateway, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, role, salt, avatar_url, createdAt, updatedAt", map[string]interface{}{"username": modelUser.Username, "email": modelUser.Email}, &modelUser, true, " AND is_verified=TRUE AND black_listed=FALSE", true)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		defer rows.Close()
@@ -362,7 +358,7 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 			// Scan the row's values into the User struct.
 			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.Role, &user.Salt, &user.AvatarUrl, &user.CreatedAt, &user.UpdatedAt)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 
@@ -372,7 +368,7 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 
 		// Check for errors from iterating over rows.
 		if err := rows.Err(); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -384,19 +380,20 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 				jwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
 
 				if err != nil {
-					c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 					return
 				}
 
-				refreshToken, err := u.generateRefreshToken()
-
+				controller, _ := u.BaseControllerFactory.GetController(baseconst.RefreshToken)
+				refreshTokenController := controller.(*RefreshTokensController)
+				refreshToken, err := refreshTokenController.GetRefreshToken(user.Id)
 				if err != nil {
-					c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 					return
 				}
 				err = cache.GetInstance().SetString(refreshToken, jwtToken)
 				if err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 					return
 				}
 
@@ -423,25 +420,25 @@ func (u *UserController) handleLogin() gin.HandlerFunc {
 				err = cache.GetInstance().SAdd([]interface{}{strconv.FormatInt(int64(user.Id), 10) + "_all_sessions", sessionId})
 
 				if err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 					return
 				}
 
 				err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
 
 				if err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 					return
 				}
 
 				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]string{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "Bearer"}))
 
 			} else {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PASSWORD_MISMATCHED, err, nil))
+				c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.PASSWORD_MISMATCHED, err, nil))
 				return
 			}
 		} else {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+			c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
 			return
 		}
 	}
@@ -452,17 +449,27 @@ func (u *UserController) handleRefreshToken() gin.HandlerFunc {
 		// Parse the refresh token from the request
 		refreshToken := c.PostForm("refresh_token")
 		if refreshToken == "" {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.REFRESH_TOKEN_REQUIRED, nil, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.REFRESH_TOKEN_REQUIRED, nil, nil))
 			return
 		}
-		jwtToken, err := cache.GetInstance().GetString(refreshToken)
-		if jwtToken == "" || err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_REFRESH_TOKEN, nil, nil))
+
+		controller, _ := u.BaseControllerFactory.GetController(baseconst.RefreshToken)
+		refreshTokenController := controller.(*RefreshTokensController)
+		validated, err := refreshTokenController.ValidateRefreshToken(refreshToken)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, nil, nil))
 			return
 		}
+
+		if !validated {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("refresh token doesn't exists"), nil))
+			return
+		}
+
 		newJwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_CREATING_JWT, nil, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, nil, nil))
 			return
 		}
 
@@ -479,7 +486,7 @@ func (u *UserController) handleRefreshToken() gin.HandlerFunc {
 
 		err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -507,13 +514,13 @@ func (u *UserController) handleBlackListUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelUser := models.User{}
 		if err := c.ShouldBind(&modelUser); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath"), modelUser)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -523,7 +530,7 @@ func (u *UserController) handleBlackListUser() gin.HandlerFunc {
 		}
 
 		if currentSession.Username == modelUser.Username {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_BLACK_LISTING, errors.New("can't black list your own user"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.FAILED_BLACK_LISTING, errors.New("can't black list your own user"), nil))
 			return
 		}
 
@@ -537,7 +544,7 @@ func (u *UserController) handleBlackListUser() gin.HandlerFunc {
 				session.BlackListed = true
 				err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
 				if err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 					return
 				}
 			}
@@ -548,7 +555,7 @@ func (u *UserController) handleBlackListUser() gin.HandlerFunc {
 		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET black_listed = $1 WHERE id = $2 ", data, false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_BLACK_LISTING, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.BLACK_LIST_SUCCESS, err, nil))
@@ -561,13 +568,13 @@ func (u *UserController) handleEditUser() gin.HandlerFunc {
 		data := make([]interface{}, 0)
 		modelUser := models.User{}
 		if err := c.ShouldBind(&modelUser); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath"), modelUser)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -579,7 +586,7 @@ func (u *UserController) handleEditUser() gin.HandlerFunc {
 		file, err := c.FormFile("image")
 
 		if err == nil && file != nil {
-			url, err := s3uploader.GetInstance().UploadToSCW(file)
+			url, statusCode, err := s3uploader.GetInstance().UploadToSCW(file)
 			if err == nil {
 
 				if currentSession.AvatarUrl != url {
@@ -589,7 +596,7 @@ func (u *UserController) handleEditUser() gin.HandlerFunc {
 					data = append(data, url)
 				}
 			} else {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
+				c.AbortWithStatusJSON(statusCode, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
 				return
 			}
 		}
@@ -608,7 +615,7 @@ func (u *UserController) handleEditUser() gin.HandlerFunc {
 
 		err = cache.GetInstance().Set(currentSession.SessionId, currentSession.EncodeRedisData())
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -619,7 +626,7 @@ func (u *UserController) handleEditUser() gin.HandlerFunc {
 
 			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+setPart, data, false)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_UPDATING_USER, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATING_USER_SUCCESS, err, nil))
@@ -632,19 +639,19 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelUser := models.User{}
 		if err := c.ShouldBind(&modelUser); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath"), modelUser)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, password_hash, role, salt", map[string]interface{}{"email": modelUser.Email}, &modelUser, true, " AND is_verified=TRUE AND black_listed=FALSE LIMIT 1", true)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		defer rows.Close()
@@ -653,7 +660,7 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 			var user models.User
 			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.PasswordHash, &user.Role, &user.Salt)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 
@@ -662,7 +669,7 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 
 		} else {
 			// Handle the case when there are no rows
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.NOT_VARIFIED_USER, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.NOT_VARIFIED_USER, err, nil))
 			return
 		}
 		fmt.Println("check passwordHash from db: ", modelUser.PasswordHash)
@@ -670,14 +677,14 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 		if modelUser.PasswordHash != "" {
 			ok, _ := utils.IsTokenValid(modelUser.PasswordHash)
 			if ok {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_ALREADY_SENT, err, nil))
+				c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.TOKEN_ALREADY_SENT, err, nil))
 				return
 			}
 			//TODO send email again
 			jwtToken, err := u.generateJWT(configmanager.GetInstance().PasswordTokenExpiry)
 
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 				return
 			}
 
@@ -685,7 +692,7 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 
 			err = emails.GetInstance().SendVerificationEmail(modelUser.Email, configmanager.GetInstance().ResetPasswordEmailSubject, emailBody)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.SEND_VERIFICATION_EMAIL_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.SEND_VERIFICATION_EMAIL_FAILED, err, nil))
 				return
 			}
 
@@ -696,14 +703,14 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 			jwtToken, err := u.generateJWT(configmanager.GetInstance().PasswordTokenExpiry)
 
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusBadGateway, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 				return
 			}
 
 			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET password_hash=$1 WHERE email=$2", []interface{}{jwtToken, modelUser.Email}, true)
 
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_UPDATING_USER, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 			//TODO send email
@@ -711,7 +718,7 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 
 			err = emails.GetInstance().SendVerificationEmail(modelUser.Email, configmanager.GetInstance().ResetPasswordEmailSubject, emailBody)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.SEND_VERIFICATION_EMAIL_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SEND_VERIFICATION_EMAIL_FAILED, err, nil))
 				return
 			}
 
@@ -729,13 +736,13 @@ func (u *UserController) handleVerifyPasswordHash() gin.HandlerFunc {
 
 		if passwordHash == "" || newPassword == "" {
 			// Handle the case where one or both fields are missing or empty
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_AND_NEW_PASSWORD_REQUIRED, errors.New("password or hash not declared"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.TOKEN_AND_NEW_PASSWORD_REQUIRED, errors.New("password or hash not declared"), nil))
 			return
 		}
 		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, password_hash, role, salt", map[string]interface{}{"password_hash": passwordHash}, &models.User{}, true, " AND is_verified=TRUE AND black_listed=FALSE LIMIT 1", true)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -743,17 +750,17 @@ func (u *UserController) handleVerifyPasswordHash() gin.HandlerFunc {
 		if rows.Next() {
 			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.PasswordHash, &user.Role, &user.Salt)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 
 		} else {
 			// Handle the case when there are no rows
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.NOT_VARIFIED_USER, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.NOT_VARIFIED_USER, err, nil))
 			return
 		}
 		if user.PasswordHash != passwordHash {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.INVALID_PASSWORD_TOKEN, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.INVALID_PASSWORD_TOKEN, err, nil))
 			return
 		}
 
@@ -762,7 +769,7 @@ func (u *UserController) handleVerifyPasswordHash() gin.HandlerFunc {
 
 		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET password = $1, password_hash=$2", []interface{}{user.Password, user.PasswordHash}, false)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_UPDATING_USER, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.TOKEN_VERIFICTION_SUCCESS, err, nil))

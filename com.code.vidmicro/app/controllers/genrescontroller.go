@@ -57,18 +57,18 @@ func (u GenresController) DoIndexing() error {
 	return nil
 }
 
-func (u *GenresController) GetGenre(id int) (models.Genres, error) {
+func (u *GenresController) GetGenre(id int) (models.Genres, int, error) {
 	data, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix))
 	if err != nil {
-		return models.Genres{}, err
+		return models.Genres{}, http.StatusInternalServerError, err
 	}
 	if len(data) <= 0 {
-		return models.Genres{}, errors.New("record not available")
+		return models.Genres{}, http.StatusBadRequest, errors.New("record not available")
 	}
 	genre := models.Genres{}
 	genre.DecodeRedisData(data)
 
-	return genre, nil
+	return genre, http.StatusOK, nil
 }
 
 func (u *GenresController) SetBaseFunctions(inter basefunctions.BaseFucntionsInterface) {
@@ -79,25 +79,25 @@ func (u *GenresController) handleCreateGenre() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelGenre := models.Genres{}
 		if err := c.ShouldBind(&modelGenre); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/put", modelGenre)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelGenre, true)
 		modelGenre.Id = int(id)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		err = cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelGenre.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix), modelGenre.EncodeRedisData())
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.PUTTING_SUCCESS, err, modelGenre))
@@ -113,7 +113,7 @@ func (u *GenresController) handleGetGenre() gin.HandlerFunc {
 
 		err := u.Validate(c.GetString("apiPath")+"/get", modelGenre)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -126,7 +126,7 @@ func (u *GenresController) handleGetGenre() gin.HandlerFunc {
 		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "", query, &modelGenre, false, "", false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		defer rows.Close()
@@ -141,7 +141,7 @@ func (u *GenresController) handleGetGenre() gin.HandlerFunc {
 			// Scan the row's values into the User struct.
 			err := rows.Scan(&tempGenre.Id, &tempGenre.Name)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 			genres = append(genres, tempGenre)
@@ -154,25 +154,25 @@ func (u *GenresController) handleUpdateGenre() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelGenre := models.Genres{}
 		if err := c.ShouldBind(&modelGenre); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/post", modelGenre)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1 WHERE id = $2", []interface{}{modelGenre.Name, modelGenre.Id}, false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		err = cache.GetInstance().Set(fmt.Sprintf("%d%s%s", modelGenre.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().GenresPostfix), modelGenre.EncodeRedisData())
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
@@ -183,20 +183,20 @@ func (u *GenresController) handleDeleteGenre() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelGenre := models.Genres{}
 		if err := c.ShouldBind(&modelGenre); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/post", modelGenre)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelGenre.Id}, false, false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 

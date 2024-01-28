@@ -56,7 +56,7 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 		// TODO: Save the data in meilisearch
 		modelTitles := models.Titles{}
 		if err := c.ShouldBind(&modelTitles); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -64,12 +64,12 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 
 		err := sonic.Unmarshal([]byte(modelTitles.Languages), &titlesLanguages)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("json is required in title languages"), nil))
 			return
 		}
 
 		if len(titlesLanguages) <= 0 {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("atleast one language is required"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("atleast one language is required"), nil))
 			return
 		}
 
@@ -86,8 +86,12 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 			languageMetaDetails := models.LanguageMetaDetails{LanguageId: titlesLanguage.LanguageId, StatusId: titlesLanguage.StatusId}
 			languageData, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", languageMetadata.LanguageId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix))
 
-			if err != nil && len(languageData) <= 0 {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the language is not found id:%d", languageMetadata.LanguageId), nil))
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, nil, nil))
+				return
+			}
+			if len(languageData) <= 0 {
+				c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, fmt.Errorf("one of the language is not found id:%d", languageMetadata.LanguageId), nil))
 				return
 			}
 
@@ -99,7 +103,12 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 			statusData, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", languageMetadata.StatusId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix))
 
 			if err != nil && len(statusData) <= 0 {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the sstatus is not found id:%d for language:%d", languageMetadata.StatusId, languageMetadata.LanguageId), nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, nil, nil))
+				return
+			}
+
+			if len(statusData) <= 0 {
+				c.AbortWithStatusJSON(http.StatusBadGateway, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, fmt.Errorf("one of the status is not found id:%d for language:%d", languageMetadata.StatusId, languageMetadata.LanguageId), nil))
 				return
 			}
 
@@ -116,23 +125,18 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 
 		err = u.Validate(c.GetString("apiPath")+"/put", modelTitles)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
-			return
-		}
-
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		file, err := c.FormFile("image")
 
 		if err == nil && file != nil {
-			url, err := s3uploader.GetInstance().UploadToSCW(file)
+			url, statusCode, err := s3uploader.GetInstance().UploadToSCW(file)
 			if err == nil {
 				modelTitles.CoverUrl = url
 			} else {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
+				c.AbortWithStatusJSON(statusCode, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
 				return
 			}
 		}
@@ -182,7 +186,7 @@ func (u *TitlesController) handleCreateTitles() gin.HandlerFunc {
 	}
 }
 
-func (u *TitlesController) GetSingleTitle(id int) (models.Titles, error) {
+func (u *TitlesController) GetSingleTitle(id int) (models.Titles, int, error) {
 	titles := make([]models.Titles, 0)
 	key := "1" + configmanager.GetInstance().RedisSeprator +
 		fmt.Sprintf("%d", id) +
@@ -198,46 +202,49 @@ func (u *TitlesController) GetSingleTitle(id int) (models.Titles, error) {
 		jsonData, err := sonic.Marshal(pr.Data)
 
 		if err != nil {
-			return models.Titles{}, err
+			return models.Titles{}, http.StatusInternalServerError, err
 		}
 
 		err = sonic.Unmarshal(jsonData, &titles)
 		if err != nil {
-			return models.Titles{}, err
+			return models.Titles{}, http.StatusInternalServerError, err
 		}
 	} else {
 		query := map[string]interface{}{"id": id}
 
 		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "", query, &models.Titles{}, false, " LIMIT 1", false)
 		if err != nil {
-			return models.Titles{}, err
+			return models.Titles{}, http.StatusInternalServerError, err
 		}
 
 		for rows.Next() {
 			tempTitle := models.Titles{}
 			err := rows.Scan(&tempTitle.Id, &tempTitle.OriginalTitle, &tempTitle.Year, &tempTitle.CoverUrl, pq.Array(&tempTitle.LanguagesMeta))
 			if err != nil {
-				return models.Titles{}, err
+				return models.Titles{}, http.StatusInternalServerError, err
 			}
 
 			controller, _ := u.BaseControllerFactory.GetController(baseconst.LanguageMeta)
 			languageController := controller.(*LanguageMetadataController)
 
-			tempTitle.LanguagesDetails, err = languageController.GetLanguageDetails(tempTitle.LanguagesMeta)
+			langDetails, statusCode, err := languageController.GetLanguageDetails(tempTitle.LanguagesMeta)
 
 			if err != nil {
-				tempTitle.LanguagesDetails = make([]models.LanguageMetaDetails, 0)
+				return models.Titles{}, statusCode, err
 			}
-
+			tempTitle.LanguagesDetails = langDetails
 			titles = append(titles, tempTitle)
 		}
 
 		pagination := models.NewPagination(1, int(configmanager.GetInstance().PageSize), 1)
 		pr := models.PaginationResults{Pagination: pagination, Data: titles}
 
-		cache.GetInstance().SetEx(key, pr.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
+		err = cache.GetInstance().SetEx(key, pr.EncodeRedisData(), configmanager.GetInstance().TitleExpiryTime)
+		if err != nil {
+			return models.Titles{}, http.StatusInternalServerError, err
+		}
 	}
-	return titles[0], nil
+	return titles[0], http.StatusOK, nil
 }
 
 func (u *TitlesController) handleGetTitles() gin.HandlerFunc {
@@ -251,7 +258,7 @@ func (u *TitlesController) handleGetTitles() gin.HandlerFunc {
 
 		err := u.Validate(c.GetString("apiPath")+"/get", modelTitles)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -295,7 +302,7 @@ func (u *TitlesController) handleGetTitles() gin.HandlerFunc {
 		rows, count, err := u.Paginate(u.GetDBName(), u.GetCollectionName(), "", query, &modelTitles, false, "", false, int(pageSize), int(page))
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		defer rows.Close()
@@ -309,17 +316,23 @@ func (u *TitlesController) handleGetTitles() gin.HandlerFunc {
 			// Scan the row's values into the User struct.
 			err := rows.Scan(&tempTitle.Id, &tempTitle.OriginalTitle, &tempTitle.Year, &tempTitle.CoverUrl, pq.Array(&tempTitle.LanguagesMeta))
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 
 			controller, _ := u.BaseControllerFactory.GetController(baseconst.LanguageMeta)
 			languageController := controller.(*LanguageMetadataController)
 
-			tempTitle.LanguagesDetails, err = languageController.GetLanguageDetails(tempTitle.LanguagesMeta)
+			langDetails, statusCode, err := languageController.GetLanguageDetails(tempTitle.LanguagesMeta)
+			tempTitle.LanguagesDetails = langDetails
 
 			if err != nil {
-				tempTitle.LanguagesDetails = make([]models.LanguageMetaDetails, 0)
+				responseMessage := responses.SERVER_ERROR
+				if statusCode == http.StatusBadRequest {
+					responseMessage = responses.BAD_REQUEST
+				}
+				c.AbortWithStatusJSON(statusCode, responses.GetInstance().WriteResponse(c, responseMessage, err, nil))
+				return
 			}
 
 			titles = append(titles, tempTitle)
@@ -335,7 +348,7 @@ func (u *TitlesController) handleGetTitles() gin.HandlerFunc {
 		}
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -349,13 +362,13 @@ func (u *TitlesController) handleUpdateTitles() gin.HandlerFunc {
 		data := make([]interface{}, 0)
 		modelTitles := models.Titles{}
 		if err := c.ShouldBind(&modelTitles); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/post", modelTitles)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -363,14 +376,14 @@ func (u *TitlesController) handleUpdateTitles() gin.HandlerFunc {
 		updateTitle := false
 
 		if err == nil && file != nil {
-			url, err := s3uploader.GetInstance().UploadToSCW(file)
+			url, statusCode, err := s3uploader.GetInstance().UploadToSCW(file)
 			if err == nil {
 				modelTitles.CoverUrl = url
 				setPart += "thumbnail = $1"
 				data = append(data, url)
 
 			} else {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
+				c.AbortWithStatusJSON(statusCode, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
 				return
 			}
 		}
@@ -395,7 +408,7 @@ func (u *TitlesController) handleUpdateTitles() gin.HandlerFunc {
 		}
 
 		if modelTitles.Languages != "" {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("please use addLanguage and removeLanguage api for languages"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("please use addLanguage and removeLanguage api for languages"), nil))
 			return
 		}
 
@@ -406,7 +419,7 @@ func (u *TitlesController) handleUpdateTitles() gin.HandlerFunc {
 
 			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+setPart, data, false)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.FAILED_UPDATING_USER, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 			pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesPostfix
@@ -455,13 +468,13 @@ func (u *TitlesController) handleDeleteTitles() gin.HandlerFunc {
 		// TODO:Delete meta data
 		modelTitles := models.Titles{}
 		if err := c.ShouldBind(&modelTitles); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		err := u.Validate(c.GetString("apiPath")+"/delete", modelTitles)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -469,19 +482,24 @@ func (u *TitlesController) handleDeleteTitles() gin.HandlerFunc {
 		err = searchengine.GetInstance().DeleteDocuments(modelMeiliTitles)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
 		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelTitles.Id}, false, false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
 		languageMetaController, _ := u.BaseControllerFactory.GetController(baseconst.LanguageMeta)
-		languageMetaController.DeleteOne(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), map[string]interface{}{"titles_id": modelTitles.Id}, false, false)
+		err = languageMetaController.DeleteOne(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), map[string]interface{}{"titles_id": modelTitles.Id}, false, false)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
 
 		pattern := "*" + configmanager.GetInstance().ClassName + configmanager.GetInstance().RedisSeprator + configmanager.GetInstance().TitlesPostfix
 
@@ -496,7 +514,12 @@ func (u *TitlesController) handleDeleteTitles() gin.HandlerFunc {
 			configmanager.GetInstance().SingleTitlePostfix +
 			configmanager.GetInstance().TitlesPostfix
 
-		cache.GetInstance().Del(key)
+		err = cache.GetInstance().Del(key)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
 
 		titleSummary := models.TitlesSummary{Id: modelTitles.Id, OriginalTitle: modelTitles.OriginalTitle}
 
@@ -511,23 +534,23 @@ func (u *TitlesController) handleAddTitleLanguages() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelLanguagesMeta := models.LanguageMeta{}
 		if err := c.ShouldBind(&modelLanguagesMeta); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		modelLanguagesMeta.Id = xid.New().String()
 		if modelLanguagesMeta.LanguageId <= 0 {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("language id is required"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("language id is required"), nil))
 			return
 		}
 
 		if modelLanguagesMeta.StatusId <= 0 {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("status id is required"), nil))
+			c.AbortWithStatusJSON(http.StatusBadGateway, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("status id is required"), nil))
 			return
 		}
 
 		if modelLanguagesMeta.TitlesId <= 0 {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("title id is required"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("title id is required"), nil))
 			return
 		}
 
@@ -535,43 +558,43 @@ func (u *TitlesController) handleAddTitleLanguages() gin.HandlerFunc {
 		count, err := languageMetaController.Count(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), map[string]interface{}{"language_id": modelLanguagesMeta.LanguageId, "titles_id": modelLanguagesMeta.TitlesId})
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
 		if count >= 1 {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("language already exsist with this id for this title"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("language already exsist with this id for this title"), nil))
 			return
 		}
 		languageExists, err := cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelLanguagesMeta.LanguageId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix))
 		if !languageExists {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the language is not found id:%d", modelLanguagesMeta.LanguageId), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, fmt.Errorf("one of the language is not found id:%d", modelLanguagesMeta.LanguageId), nil))
 			return
 		}
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("redis connection failed:%d", modelLanguagesMeta.LanguageId), nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, fmt.Errorf("redis connection failed:%d", modelLanguagesMeta.LanguageId), nil))
 			return
 		}
 
 		statusExist, err := cache.GetInstance().Exists(fmt.Sprintf("%d%s%s", modelLanguagesMeta.StatusId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix))
 		if !statusExist {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("one of the sstatus is not found id:%d for language:%d", modelLanguagesMeta.StatusId, modelLanguagesMeta.LanguageId), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, fmt.Errorf("one of the sstatus is not found id:%d for language:%d", modelLanguagesMeta.StatusId, modelLanguagesMeta.LanguageId), nil))
 			return
 		}
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, fmt.Errorf("redis connection failed:%d", modelLanguagesMeta.LanguageId), nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, fmt.Errorf("redis connection failed:%d", modelLanguagesMeta.LanguageId), nil))
 			return
 		}
 
 		titleCount, err := u.Count(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelLanguagesMeta.TitlesId})
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		if titleCount <= 0 {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("no title exists with this id"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("no title exists with this id"), nil))
 			return
 		}
 
@@ -581,7 +604,7 @@ func (u *TitlesController) handleAddTitleLanguages() gin.HandlerFunc {
 		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), updateQuery, []interface{}{modelLanguagesMeta.Id, modelLanguagesMeta.TitlesId}, false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -595,17 +618,17 @@ func (u *TitlesController) handleDeleteLanguages() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modelLanguagesMeta := models.LanguageMeta{}
 		if err := c.ShouldBind(&modelLanguagesMeta); err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadGateway, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
 		if modelLanguagesMeta.LanguageId <= 0 {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("language id is required"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("language id is required"), nil))
 			return
 		}
 
 		if modelLanguagesMeta.TitlesId <= 0 {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("title id is required"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("title id is required"), nil))
 			return
 		}
 
@@ -613,7 +636,7 @@ func (u *TitlesController) handleDeleteLanguages() gin.HandlerFunc {
 		rows, err := languageMetaController.Find(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), "", map[string]interface{}{"language_id": modelLanguagesMeta.LanguageId, "titles_id": modelLanguagesMeta.TitlesId}, models.LanguageMeta{}, false, "", false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
@@ -623,14 +646,14 @@ func (u *TitlesController) handleDeleteLanguages() gin.HandlerFunc {
 			// Scan the row's values into the User struct.
 			err := rows.Scan(&modelLanguagesMeta.Id, &modelLanguagesMeta.TitlesId, &modelLanguagesMeta.LanguageId, &modelLanguagesMeta.StatusId)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 
 		}
 
 		if modelLanguagesMeta.Id == "" {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("id doesn't exist"), nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("id doesn't exist"), nil))
 			return
 		}
 
@@ -638,13 +661,13 @@ func (u *TitlesController) handleDeleteLanguages() gin.HandlerFunc {
 		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), string(updateQuery), []interface{}{modelLanguagesMeta.Id, modelLanguagesMeta.TitlesId}, false)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("updating title failed"), nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, errors.New("updating title failed"), nil))
 			return
 		}
 
 		err = languageMetaController.DeleteOne(languageMetaController.GetDBName(), languageMetaController.GetCollectionName(), map[string]interface{}{"id": modelLanguagesMeta.Id}, false, false)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, errors.New("deleting language metadata failed"), nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, errors.New("deleting language metadata failed"), nil))
 			return
 		}
 
@@ -676,7 +699,7 @@ func (u *TitlesController) updateForMeilisearch(titlesId int) {
 		controller, _ := u.BaseControllerFactory.GetController(baseconst.LanguageMeta)
 		languageController := controller.(*LanguageMetadataController)
 
-		tempTitle.LanguagesDetails, err = languageController.GetLanguageDetails(tempTitle.LanguagesMeta)
+		tempTitle.LanguagesDetails, _, err = languageController.GetLanguageDetails(tempTitle.LanguagesMeta)
 
 		if err != nil {
 			tempTitle.LanguagesDetails = make([]models.LanguageMetaDetails, 0)
@@ -730,7 +753,7 @@ func (u *TitlesController) handleSearchTitles() gin.HandlerFunc {
 		pr, err := searchengine.GetInstance().SearchDocuments(modelTitles, pageSize, page, filter)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 

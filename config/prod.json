@@ -36,5 +36,6 @@
         "folder": "static"
     },
     "pageSize": 10,
-    "redisSeprator": "_"
+    "redisSeprator": "_",
+    "writeError": true
 }

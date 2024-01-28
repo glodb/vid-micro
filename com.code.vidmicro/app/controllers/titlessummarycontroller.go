@@ -77,7 +77,7 @@ func (u *TitlesSummaryController) handleGetTitles() gin.HandlerFunc {
 
 		err := u.Validate(c.GetString("apiPath")+"/get", modelTitles)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
@@ -121,7 +121,7 @@ func (u *TitlesSummaryController) handleGetTitles() gin.HandlerFunc {
 		rows, count, err := u.Paginate(u.GetDBName(), u.GetCollectionName(), "id,original_title", query, &modelTitles, false, "", false, int(pageSize), int(page))
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		defer rows.Close()
@@ -135,7 +135,7 @@ func (u *TitlesSummaryController) handleGetTitles() gin.HandlerFunc {
 			// Scan the row's values into the User struct.
 			err := rows.Scan(&tempTitle.Id, &tempTitle.OriginalTitle)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_FAILED, err, nil))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 
@@ -152,7 +152,7 @@ func (u *TitlesSummaryController) handleGetTitles() gin.HandlerFunc {
 		}
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, err, nil))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 

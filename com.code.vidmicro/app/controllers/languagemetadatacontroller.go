@@ -3,6 +3,7 @@ package controllers
 import (
 	"errors"
 	"fmt"
+	"net/http"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
@@ -32,7 +33,7 @@ func (u LanguageMetadataController) DoIndexing() error {
 	return nil
 }
 
-func (u *LanguageMetadataController) GetLanguageDetails(ids []string) ([]models.LanguageMetaDetails, error) {
+func (u *LanguageMetadataController) GetLanguageDetails(ids []string) ([]models.LanguageMetaDetails, int, error) {
 	languagesMeta := []models.LanguageMetaDetails{}
 	for _, language := range ids {
 
@@ -46,7 +47,7 @@ func (u *LanguageMetadataController) GetLanguageDetails(ids []string) ([]models.
 
 			rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "", map[string]interface{}{"id": language}, &models.LanguageMeta{}, false, "", false)
 			if err != nil {
-				return nil, err
+				return nil, http.StatusInternalServerError, err
 			}
 			defer rows.Close()
 
@@ -55,20 +56,28 @@ func (u *LanguageMetadataController) GetLanguageDetails(ids []string) ([]models.
 				// Scan the row's values into the User struct.
 				err := rows.Scan(&tempMeta.Id, &tempMeta.TitlesId, &tempMeta.LanguageId, &tempMeta.StatusId)
 				if err != nil {
-					return nil, err
+					return nil, http.StatusInternalServerError, err
 				}
 
 			}
 			langData, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", tempMeta.LanguageId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguagePostfix))
 
-			if err != nil || len(langData) == 0 {
-				return nil, errors.New("one of the language is not found")
+			if err != nil {
+				return nil, http.StatusInternalServerError, errors.New("internal server error")
+			}
+
+			if len(langData) == 0 {
+				return nil, http.StatusBadRequest, errors.New("one of the language is not found")
 			}
 
 			statusData, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", tempMeta.StatusId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().StatusPostfix))
 
 			if err != nil || len(statusData) == 0 {
-				return nil, errors.New("one of the status is not found")
+				return nil, http.StatusInternalServerError, errors.New("internal server error")
+			}
+
+			if len(statusData) == 0 {
+				return nil, http.StatusBadRequest, errors.New("one of the status is not found")
 			}
 
 			statusObject := models.Status{}
@@ -82,14 +91,14 @@ func (u *LanguageMetadataController) GetLanguageDetails(ids []string) ([]models.
 			err = cache.GetInstance().SetEx(fmt.Sprintf("%s%s%s", language, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().LanguageMetadataPostfix), languageMeta.EncodeRedisData(), configmanager.GetInstance().LanguageMetaExpiryTime)
 
 			if err != nil {
-				return nil, err
+				return nil, http.StatusInternalServerError, err
 			}
 		}
 		if len(languagesMeta) <= 0 {
-			return nil, errors.New("language meta not found")
+			return nil, http.StatusBadRequest, errors.New("language meta not found")
 		}
 	}
-	return languagesMeta, nil
+	return languagesMeta, http.StatusOK, nil
 }
 
 func (u *LanguageMetadataController) SetBaseFunctions(inter basefunctions.BaseFucntionsInterface) {
