@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
+	"com.code.vidmicro/com.code.vidmicro/app/models/jsonmodels"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseinterfaces"
@@ -71,12 +72,12 @@ func (u *ContentTypeController) handleCreateContentType() gin.HandlerFunc {
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/put", modelContent)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelContent)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
+
 		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelContent, true)
 		modelContent.Id = int(id)
 
@@ -97,16 +98,15 @@ func (u *ContentTypeController) handleCreateContentType() gin.HandlerFunc {
 
 func (u *ContentTypeController) handleGetContentType() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelContent := models.ContentType{}
+		modelContent := jsonmodels.IdEmpty{}
 		id, _ := strconv.ParseInt(c.Query("id"), 10, 64)
 		modelContent.Id = int(id)
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/get", modelContent)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelContent)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		query := map[string]interface{}{"id": modelContent.Id}
 
@@ -143,20 +143,19 @@ func (u *ContentTypeController) handleGetContentType() gin.HandlerFunc {
 
 func (u *ContentTypeController) handleUpdateContentType() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelContent := models.ContentType{}
+		modelContent := jsonmodels.EditContentType{}
 		if err := c.ShouldBind(&modelContent); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadGateway, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelContent)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelContent)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
-		err := u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1 WHERE id = $2", []interface{}{modelContent.Name, modelContent.Id}, false)
+		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1 WHERE id = $2", []interface{}{modelContent.Name, modelContent.Id}, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -174,20 +173,19 @@ func (u *ContentTypeController) handleUpdateContentType() gin.HandlerFunc {
 
 func (u *ContentTypeController) handleDeleteContentType() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelContent := models.ContentType{}
+		modelContent := jsonmodels.Id{}
 		if err := c.ShouldBind(&modelContent); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelContent)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelContent)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
-		err := u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelContent.Id}, false, false)
+		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelContent.Id}, false, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))

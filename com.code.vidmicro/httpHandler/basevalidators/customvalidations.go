@@ -5,6 +5,8 @@ import (
 	"sync"
 	"unicode"
 
+	"com.code.vidmicro/com.code.vidmicro/app/models"
+	"github.com/bytedance/sonic"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -49,13 +51,20 @@ func (cv *CustomValidator) RegisterCustomValidators() {
 	})
 
 	cv.v.RegisterValidation("password", cv.PasswordValidator)
-
-	cv.v.RegisterValidation("validateExclusive", cv.validateExclusive)
+	cv.v.RegisterValidation("arraylength", cv.JsonArrayValidator)
 
 	cv.v.RegisterTranslation("required", cv.trans, func(ut ut.Translator) error {
 		return ut.Add("required", "{0} must have a value!", true) // see universal-translator for details
 	}, func(ut ut.Translator, fe validator.FieldError) string {
 		t, _ := ut.T("required", fe.Field())
+
+		return t
+	})
+
+	cv.v.RegisterTranslation("required_without", cv.trans, func(ut ut.Translator) error {
+		return ut.Add("required_without", "{0} atleast must have a value!", true) // see universal-translator for details
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		t, _ := ut.T("required_without", fe.Field())
 
 		return t
 	})
@@ -92,42 +101,53 @@ func (cv *CustomValidator) RegisterCustomValidators() {
 		return t
 	})
 
-	cv.v.RegisterTranslation("validateExclusive", cv.trans, func(ut ut.Translator) error {
-		return ut.Add("validateExclusive", "One of username or email is required", true) // see universal-translator for details
+	cv.v.RegisterTranslation("gt", cv.trans, func(ut ut.Translator) error {
+		return ut.Add("gt", "{0} must be greater than! {1}", true) // see universal-translator for details
 	}, func(ut ut.Translator, fe validator.FieldError) string {
-		t, _ := ut.T("validateExclusive", fe.Field())
+		t, _ := ut.T("gt", fe.Field(), fe.Param())
 
 		return t
 	})
+
+	cv.v.RegisterTranslation("arraylength", cv.trans, func(ut ut.Translator) error {
+		return ut.Add("arraylength", "{0} must be json array with at least one value", true) // see universal-translator for details
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		t, _ := ut.T("arraylength", fe.Field())
+
+		return t
+	})
+
+	cv.v.RegisterTranslation("oneof", cv.trans, func(ut ut.Translator) error {
+		return ut.Add("oneof", "{0} can only be {1}", true) // see universal-translator for details
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		t, _ := ut.T("oneof", fe.Field(), fe.Param())
+
+		return t
+	})
+
+	cv.v.RegisterTranslation("lte", cv.trans, func(ut ut.Translator) error {
+		return ut.Add("lte", "{0} must be lesser than equal to {1}", true) // see universal-translator for details
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		t, _ := ut.T("lte", fe.Field(), fe.Param())
+
+		return t
+	})
+
 }
 
-func (cv *CustomValidator) validateExclusive(fl validator.FieldLevel) bool {
-	field := fl.Field()
-	kind := field.Kind()
+func (cv *CustomValidator) JsonArrayValidator(fl validator.FieldLevel) bool {
+	jsonValidator := fl.Field().String()
 
-	fieldName := fl.FieldName()
+	titlesLanguages := make([]models.TitlesLanguage, 0)
 
-	nameChecker := "email"
-	if fieldName == "email" {
-		nameChecker = "username"
+	err := sonic.Unmarshal([]byte(jsonValidator), &titlesLanguages)
+	if err != nil {
+		return false
 	}
 
-	// Check if either the username or email field is not empty
-	if kind == reflect.String {
-		value := field.String()
-
-		// Ensure that only one of the fields is not empty
-		if len(value) <= 0 {
-			otherField := fl.Parent().FieldByName(nameChecker)
-
-			if otherField.IsValid() && otherField.String() != "" {
-				return true
-			} else {
-				return false
-			}
-		}
+	if len(titlesLanguages) <= 0 {
+		return false
 	}
-
 	return true
 }
 

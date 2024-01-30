@@ -4,9 +4,15 @@ import "github.com/bytedance/sonic"
 
 type LanguageMeta struct {
 	Id         string `db:"id VARCHAR(255) PRIMARY KEY UNIQUE NOT NULL"`
-	TitlesId   int    `db:"titles_id Integer" form:"titles_id" json:"titles_id"`
-	LanguageId int    `db:"language_id Integer" form:"language_id" json:"language_id"`
-	StatusId   int    `db:"status_id Integer" form:"status_id" json:"status_id"`
+	TitlesId   int    `db:"titles_id Integer" form:"titles_id" json:"titles_id" validate:"required,min=3" field:"titles_id"`
+	LanguageId int    `db:"language_id Integer" form:"language_id" json:"language_id" validate:"required,min=3" field:"language_id"`
+	StatusId   int    `db:"status_id Integer" form:"status_id" json:"status_id" validate:"required,min=3" field:"status_id"`
+}
+
+type EditLanguageMeta struct {
+	Id         string `db:"id VARCHAR(255) PRIMARY KEY UNIQUE NOT NULL"`
+	TitlesId   int    `db:"titles_id Integer" form:"titles_id" json:"titles_id" validate:"required,min=3" field:"titles_id"`
+	LanguageId int    `db:"language_id Integer" form:"language_id" json:"language_id" validate:"required,min=3" field:"language_id"`
 }
 
 type LanguageMetaDetails struct {

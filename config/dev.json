@@ -43,5 +43,6 @@
 		".png":  true
     },
     "allowedSizeInMbs": 10,
-    "writeError": true
+    "writeError": true,
+    "cookieName":"vidmicro_cookie"
 }

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
+	"com.code.vidmicro/com.code.vidmicro/app/models/jsonmodels"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseinterfaces"
@@ -85,12 +86,12 @@ func (u *GenresController) handleCreateGenre() gin.HandlerFunc {
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/put", modelGenre)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelGenre)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
+
 		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelGenre, true)
 		modelGenre.Id = int(id)
 
@@ -109,17 +110,16 @@ func (u *GenresController) handleCreateGenre() gin.HandlerFunc {
 
 func (u *GenresController) handleGetGenre() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelGenre := models.Genres{}
+		modelGenre := jsonmodels.IdEmpty{}
 
 		id, _ := strconv.ParseInt(c.Query("id"), 10, 64)
 		modelGenre.Id = int(id)
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/get", modelGenre)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelGenre)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		query := map[string]interface{}{"id": modelGenre.Id}
 
@@ -156,20 +156,19 @@ func (u *GenresController) handleGetGenre() gin.HandlerFunc {
 
 func (u *GenresController) handleUpdateGenre() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelGenre := models.Genres{}
+		modelGenre := jsonmodels.EditGenres{}
 		if err := c.ShouldBind(&modelGenre); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelGenre)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelGenre)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
-		err := u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1 WHERE id = $2", []interface{}{modelGenre.Name, modelGenre.Id}, false)
+		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1 WHERE id = $2", []interface{}{modelGenre.Name, modelGenre.Id}, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -186,20 +185,19 @@ func (u *GenresController) handleUpdateGenre() gin.HandlerFunc {
 
 func (u *GenresController) handleDeleteGenre() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelGenre := models.Genres{}
+		modelGenre := jsonmodels.Id{}
 		if err := c.ShouldBind(&modelGenre); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelGenre)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelGenre)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
-		err := u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelGenre.Id}, false, false)
+		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelGenre.Id}, false, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))

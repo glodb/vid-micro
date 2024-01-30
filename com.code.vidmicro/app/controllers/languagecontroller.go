@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
+	"com.code.vidmicro/com.code.vidmicro/app/models/jsonmodels"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseinterfaces"
@@ -72,13 +73,12 @@ func (u *LanguageController) handleCreateLanguage() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
+		err := basevalidators.GetInstance().GetValidator().Struct(modelLanguage)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/put", modelLanguage)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
 		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelLanguage, true)
 		modelLanguage.Id = int(id)
 
@@ -99,16 +99,15 @@ func (u *LanguageController) handleCreateLanguage() gin.HandlerFunc {
 
 func (u *LanguageController) handleGetLanguage() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelLanguage := models.Language{}
+		modelLanguage := jsonmodels.IdEmpty{}
 		id, _ := strconv.ParseInt(c.Query("id"), 10, 64)
 		modelLanguage.Id = int(id)
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/get", modelLanguage)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelLanguage)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		query := map[string]interface{}{"id": modelLanguage.Id}
 
@@ -153,20 +152,19 @@ func (u *LanguageController) DeleteLanguage(modelLanguage models.Language) {
 
 func (u *LanguageController) handleUpdateLanguage() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelLanguage := models.Language{}
+		modelLanguage := jsonmodels.EditLanguage{}
 		if err := c.ShouldBind(&modelLanguage); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelLanguage)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelLanguage)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
-		err := u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1, code = $2 WHERE id = $3", []interface{}{modelLanguage.Name, modelLanguage.Code, modelLanguage.Id}, false)
+		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1, code = $2 WHERE id = $3", []interface{}{modelLanguage.Name, modelLanguage.Code, modelLanguage.Id}, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -184,20 +182,19 @@ func (u *LanguageController) handleUpdateLanguage() gin.HandlerFunc {
 
 func (u *LanguageController) handleDeleteLanguage() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelLanguage := models.Language{}
+		modelLanguage := jsonmodels.EditLanguage{}
 		if err := c.ShouldBind(&modelLanguage); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelLanguage)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelLanguage)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
-		err := u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelLanguage.Id}, false, false)
+		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelLanguage.Id}, false, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))

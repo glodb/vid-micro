@@ -7,10 +7,10 @@ type TitlesLanguage struct {
 
 type Titles struct {
 	Id               int                   `db:"id SERIAL PRIMARY KEY" form:"id"`
-	OriginalTitle    string                `db:"original_title VARCHAR(255) NOT NULL" json:"original_title" form:"original_title"`
-	Year             int                   `db:"year INTEGER" json:"year" form:"year"`
+	OriginalTitle    string                `db:"original_title VARCHAR(255) NOT NULL" json:"original_title" form:"original_title" validate:"required,min=3" field:"original_title"`
+	Year             int                   `db:"year INTEGER" json:"year" form:"year" validate:"required,gt=1900" field:"year"`
 	CoverUrl         string                `db:"cover_url VARCHAR(255)" json:"cover_url" form:"cover_url"`
-	Languages        string                `json:"languages,omitempty" form:"languages"`
+	Languages        string                `json:"languages,omitempty" form:"languages" validate:"arraylength,required" field:"languages"`
 	LanguagesMeta    []string              `db:"languages_meta VARCHAR(50)[]" json:"-"`
 	LanguagesDetails []LanguageMetaDetails `json:"languages_details,omitempty"`
 }

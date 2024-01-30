@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
+	"com.code.vidmicro/com.code.vidmicro/app/models/jsonmodels"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseconst"
@@ -70,19 +71,18 @@ func (u *TitlesSummaryController) DeleteTitleLanguage(languageMeta models.Langua
 
 func (u *TitlesSummaryController) handleGetTitles() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelTitles := models.TitlesSummary{}
+		modelTitles := jsonmodels.IdEmpty{}
 		idString := c.Query("id")
 		id, _ := strconv.ParseInt(c.Query("id"), 10, 64)
 		page := int64(1)
 		pageString := c.Query("page")
 		modelTitles.Id = int(id)
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/get", modelTitles)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelTitles)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		query := map[string]interface{}{"id": modelTitles.Id}
 

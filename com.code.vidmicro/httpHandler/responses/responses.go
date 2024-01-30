@@ -80,6 +80,7 @@ const (
 	URL_GENERATED                            = 1064
 	VALIDATION_FAILED                        = 1065
 	USERNAME_OR_EMAIL_EXISTS                 = 1066
+	SESSION_NOT_PROVIDED                     = 1067
 )
 
 type Responses struct {

@@ -8,7 +8,6 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/app/models"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
-	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseconst"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseinterfaces"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/baserouter"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basevalidators"
@@ -79,16 +78,6 @@ func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 
 		// Set a cookie
 		c.SetCookie(configmanager.GetInstance().CookieName, sessionId, int(configmanager.GetInstance().SessionExpirySeconds), configmanager.GetInstance().CookiePath, configmanager.GetInstance().CookieDomain, false, true)
-
-		userSession := models.UserSessions{SessionId: sessionId, CreatedAt: modelSession.CreatedAt, ExpiringAt: modelSession.ExpiringAt}
-
-		userSessionController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
-		_, err = userSessionController.Add(userSessionController.GetDBName(), userSessionController.GetCollectionName(), userSession, false)
-
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-			return
-		}
 
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_SESSION_SUCCESS, err, modelSession))
 	}

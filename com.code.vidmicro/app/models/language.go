@@ -6,8 +6,8 @@ import (
 
 type Language struct {
 	Id   int    `db:"id SERIAL PRIMARY KEY" json:"id" form:"id"`
-	Name string `db:"name VARCHAR(255) NOT NULL UNIQUE" json:"name" form:"name"`
-	Code string `db:"code VARCHAR(255) NOT NULL UNIQUE" json:"code" form:"code"`
+	Name string `db:"name VARCHAR(255) NOT NULL UNIQUE" json:"name" form:"name" validate:"required,min=3" field:"name"`
+	Code string `db:"code VARCHAR(255) NOT NULL UNIQUE" json:"code" form:"code" validate:"required,min=2" field:"code"`
 }
 
 func (ts *Language) EncodeRedisData() []byte {

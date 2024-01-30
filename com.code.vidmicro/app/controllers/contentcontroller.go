@@ -1,12 +1,14 @@
 package controllers
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
+	"com.code.vidmicro/com.code.vidmicro/app/models/jsonmodels"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseconst"
@@ -97,12 +99,12 @@ func (u *ContentController) handleCreateContent() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/put", modelContent)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+
+		err := basevalidators.GetInstance().GetValidator().Struct(modelContent)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		if !u.validateTitleLanguage(modelContent) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.LANGUAGE_NOT_ADDED_IN_TITLE, errors.New("validating language failed"), nil))
@@ -189,14 +191,6 @@ func (u *ContentController) handleGetContent() gin.HandlerFunc {
 			modelContent.TypeId = int(idType)
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/get", modelContent)
-
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
-
 		if pageString != "" {
 			pageInt, _ := strconv.ParseInt(c.Query("page"), 10, 64)
 			page = pageInt
@@ -235,12 +229,16 @@ func (u *ContentController) handleGetContent() gin.HandlerFunc {
 			// Create a User struct to scan values into.
 			tempContent := models.Contents{}
 
+			thumbnail := sql.NullString{}
+			alternativeName := sql.NullString{}
 			// Scan the row's values into the User struct.
-			err := rows.Scan(&tempContent.Id, &tempContent.Name, &tempContent.AlternativeName, &tempContent.Thumbnail, &tempContent.Description, &tempContent.TypeId, &tempContent.LanguageId, &tempContent.AssociatedTitle)
+			err := rows.Scan(&tempContent.Id, &tempContent.Name, &alternativeName, &thumbnail, &tempContent.Description, &tempContent.TypeId, &tempContent.LanguageId, &tempContent.AssociatedTitle)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
+			tempContent.AlternativeName = alternativeName.String
+			tempContent.Thumbnail = thumbnail.String
 
 			contentTypeData, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", tempContent.TypeId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentTypePostfix))
 			if err != nil {
@@ -295,18 +293,17 @@ func (u *ContentController) handleUpdateContent() gin.HandlerFunc {
 
 		setPart := " SET "
 		data := make([]interface{}, 0)
-		modelContent := models.Contents{}
+		modelContent := jsonmodels.EditContents{}
 		if err := c.ShouldBind(&modelContent); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelContent)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelContent)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		file, err := c.FormFile("image")
 
@@ -370,7 +367,7 @@ func (u *ContentController) handleUpdateContent() gin.HandlerFunc {
 		}
 
 		if modelContent.LanguageId >= 0 {
-			if u.validateTitleLanguage(modelContent) {
+			if u.validateTitleLanguage(models.Contents{AssociatedTitle: modelContent.AssociatedTitle, Id: modelContent.Id, LanguageId: modelContent.LanguageId}) {
 				lengthString := strconv.FormatInt(int64(len(data)+1), 10)
 				if len(data) > 0 {
 					setPart += ","
@@ -408,26 +405,25 @@ func (u *ContentController) handleUpdateContent() gin.HandlerFunc {
 
 func (u *ContentController) handleDeleteContent() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelContent := models.Contents{}
+		modelContent := jsonmodels.AssociatedTitleEmpty{}
 		if err := c.ShouldBind(&modelContent); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/delete", modelContent)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelContent)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
-		err := u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelContent.Id}, false, false)
+		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelContent.Id}, false, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
-		keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%d%s%s", modelContent.AssociatedTitle, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentPostFix))
+		keys := cache.GetInstance().GetKeys(fmt.Sprintf("*%d%s%s", modelContent.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().ContentPostFix))
 		if len(keys) > 0 {
 			cache.GetInstance().DelMany(keys)
 		}

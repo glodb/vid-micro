@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
+	"com.code.vidmicro/com.code.vidmicro/app/models/jsonmodels"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseinterfaces"
@@ -71,12 +72,12 @@ func (u *StatusController) handleCreateStatus() gin.HandlerFunc {
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/put", modelStatus)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelStatus)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
+
 		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelStatus, true)
 		modelStatus.Id = int(id)
 
@@ -97,16 +98,15 @@ func (u *StatusController) handleCreateStatus() gin.HandlerFunc {
 
 func (u *StatusController) handleGetStatus() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelStatus := models.Status{}
+		modelStatus := jsonmodels.IdEmpty{}
 		id, _ := strconv.ParseInt(c.Query("id"), 10, 64)
 		modelStatus.Id = int(id)
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/get", modelStatus)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelStatus)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		query := map[string]interface{}{"id": modelStatus.Id}
 
@@ -143,20 +143,19 @@ func (u *StatusController) handleGetStatus() gin.HandlerFunc {
 
 func (u *StatusController) handleUpdateStatus() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelStatus := models.Status{}
+		modelStatus := jsonmodels.EditStatus{}
 		if err := c.ShouldBind(&modelStatus); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelStatus)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelStatus)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
-		err := u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1 WHERE id = $2", []interface{}{modelStatus.Name, modelStatus.Id}, false)
+		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1 WHERE id = $2", []interface{}{modelStatus.Name, modelStatus.Id}, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -175,20 +174,19 @@ func (u *StatusController) handleUpdateStatus() gin.HandlerFunc {
 
 func (u *StatusController) handleDeleteStatus() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelStatus := models.Status{}
+		modelStatus := jsonmodels.Id{}
 		if err := c.ShouldBind(&modelStatus); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelStatus)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelStatus)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
-		err := u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelStatus.Id}, false, false)
+		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelStatus.Id}, false, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))

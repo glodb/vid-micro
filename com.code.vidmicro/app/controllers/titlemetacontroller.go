@@ -1,12 +1,14 @@
 package controllers
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
+	"com.code.vidmicro/com.code.vidmicro/app/models/jsonmodels"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseconst"
@@ -88,12 +90,11 @@ func (u *TitleMetaController) handleCreateTitleMeta() gin.HandlerFunc {
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/put", modelTitleMeta)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelTitleMeta)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		title, titleType, genres, genreObject, statusCode, err := u.GetMetaDataRecordData(modelTitleMeta.TitleId, modelTitleMeta.Genres, modelTitleMeta.TypeId)
 
@@ -116,14 +117,14 @@ func (u *TitleMetaController) handleCreateTitleMeta() gin.HandlerFunc {
 			CoverUrl:         title.CoverUrl,
 			LanguagesDetails: title.LanguagesDetails,
 			AlternativeName:  modelTitleMeta.AlternativeName,
-			Sequence:         modelTitleMeta.Sequence,
+			Sequence:         int(modelTitleMeta.Sequence),
 			TypeId:           modelTitleMeta.TypeId,
 			TypeName:         titleType.Name,
 			Genres:           genres,
 			GenresObject:     genreObject,
 		}
 
-		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelTitleMeta, false)
+		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelTitleMeta, true)
 		modelTitleMeta.Id = int(id)
 
 		if err != nil {
@@ -145,26 +146,25 @@ func (u *TitleMetaController) handleCreateTitleMeta() gin.HandlerFunc {
 
 func (u *TitleMetaController) handleGetTitleMeta() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelTitleMeta := models.TitleMetaData{}
+		modelTitleMeta := jsonmodels.TitleIdEmpty{}
 		id, _ := strconv.ParseInt(c.Query("title_id"), 10, 64)
-		modelTitleMeta.TitleId = int(id)
+		modelTitleMeta.Id = int(id)
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/get", modelTitleMeta)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelTitleMeta)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		meilisearchRecord := models.MeilisearchTitle{}
-		data, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", modelTitleMeta.TitleId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TitlesMetaPostfix))
+		data, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", modelTitleMeta.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TitlesMetaPostfix))
 
 		if err == nil && len(data) > 0 {
 			meilisearchRecord.DecodeRedisData(data)
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.GETTING_SUCCESS, err, meilisearchRecord))
 			return
 		} else {
-			query := map[string]interface{}{"title_id": modelTitleMeta.TitleId}
+			query := map[string]interface{}{"title_id": modelTitleMeta.Id}
 
 			rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "", query, &modelTitleMeta, false, " LIMIT 1", false)
 
@@ -178,18 +178,23 @@ func (u *TitleMetaController) handleGetTitleMeta() gin.HandlerFunc {
 
 			for rows.Next() {
 				var arrayData pq.Int32Array
-				err := rows.Scan(&tempTitleMeta.Id, &tempTitleMeta.TitleId, &tempTitleMeta.Title, &tempTitleMeta.AlternativeName, &tempTitleMeta.Sequence, &tempTitleMeta.TypeId, &tempTitleMeta.Year, &tempTitleMeta.Score, &arrayData)
+				alternativeName := sql.NullString{}
+				sequence := sql.NullInt32{}
+				err := rows.Scan(&tempTitleMeta.Id, &tempTitleMeta.TitleId, &tempTitleMeta.Title, &alternativeName, &sequence, &tempTitleMeta.TypeId, &tempTitleMeta.Year, &tempTitleMeta.Score, &arrayData)
 				if err != nil {
 					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 					return
 				}
+
+				tempTitleMeta.AlternativeName = alternativeName.String
+				tempTitleMeta.Sequence = sequence.Int32
 				tempTitleMeta.Genres = make([]int, len(arrayData))
 				for i, v := range arrayData {
 					tempTitleMeta.Genres[i] = int(v)
 				}
 			}
 
-			title, titleType, genres, genreObject, statusCode, err := u.GetMetaDataRecordData(modelTitleMeta.TitleId, modelTitleMeta.Genres, modelTitleMeta.TypeId)
+			title, titleType, genres, genreObject, statusCode, err := u.GetMetaDataRecordData(tempTitleMeta.TitleId, tempTitleMeta.Genres, tempTitleMeta.TypeId)
 
 			if err != nil {
 				responseMessage := responses.SERVER_ERROR
@@ -207,7 +212,7 @@ func (u *TitleMetaController) handleGetTitleMeta() gin.HandlerFunc {
 				CoverUrl:         title.CoverUrl,
 				LanguagesDetails: title.LanguagesDetails,
 				AlternativeName:  tempTitleMeta.AlternativeName,
-				Sequence:         tempTitleMeta.Sequence,
+				Sequence:         int(tempTitleMeta.Sequence),
 				TypeId:           tempTitleMeta.TypeId,
 				TypeName:         titleType.Name,
 				Genres:           genres,
@@ -231,19 +236,18 @@ func (u *TitleMetaController) ChangeTitleName(title_id int, name string) {
 
 func (u *TitleMetaController) handleUpdateTitleMeta() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelTitleMeta := models.TitleMetaData{}
+		modelTitleMeta := jsonmodels.EditTitleMetaData{}
 		meiliSearchUpdate := models.MeilisearchTitle{}
 		if err := c.ShouldBind(&modelTitleMeta); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelTitleMeta)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelTitleMeta)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		meiliSearchUpdate.Id = modelTitleMeta.TitleId
 		data := make([]interface{}, 0)
@@ -305,11 +309,6 @@ func (u *TitleMetaController) handleUpdateTitleMeta() gin.HandlerFunc {
 			meiliSearchUpdate.Score = modelTitleMeta.Score
 		}
 
-		if len(modelTitleMeta.Genres) > 0 {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("to update genres use, add_title_genres, delete_title_genres"), nil))
-			return
-		}
-
 		if len(data) > 0 {
 			lengthString := strconv.FormatInt(int64(len(data)+1), 10)
 			setPart += " WHERE id =$" + lengthString
@@ -333,27 +332,26 @@ func (u *TitleMetaController) handleUpdateTitleMeta() gin.HandlerFunc {
 
 func (u *TitleMetaController) handleDeleteTitleMeta() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelTitleMeta := models.TitleMetaData{}
+		modelTitleMeta := jsonmodels.TitleId{}
 		if err := c.ShouldBind(&modelTitleMeta); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath")+"/post", modelTitleMeta)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelTitleMeta)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
-		err := u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"title_id": modelTitleMeta.TitleId}, false, false)
+		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"title_id": modelTitleMeta.Id}, false, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
-		searchengine.GetInstance().DeleteDocumentsMeta(models.MeilisearchTitle{Id: modelTitleMeta.TitleId})
-		cache.GetInstance().Del(fmt.Sprintf("%d%s%s", modelTitleMeta.TitleId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TitlesMetaPostfix))
+		searchengine.GetInstance().DeleteDocumentsMeta(models.MeilisearchTitle{Id: modelTitleMeta.Id})
+		cache.GetInstance().Del(fmt.Sprintf("%d%s%s", modelTitleMeta.Id, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TitlesMetaPostfix))
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.DELETING_SUCCESS, err, nil))
 	}
 }
@@ -366,13 +364,9 @@ func (u *TitleMetaController) handleAddTitleGenre() gin.HandlerFunc {
 			return
 		}
 
-		if modelGenreData.GenreId <= 0 {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("genre id is required"), nil))
-			return
-		}
-
-		if modelGenreData.TitleId <= 0 {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("title id is required"), nil))
+		err := basevalidators.GetInstance().GetValidator().Struct(modelGenreData)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
 			return
 		}
 
@@ -410,18 +404,19 @@ func (u *TitleMetaController) handleDeleteTitleGenre() gin.HandlerFunc {
 			return
 		}
 
-		if modelGenreData.GenreId <= 0 {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("genre id is required"), nil))
+		err := basevalidators.GetInstance().GetValidator().Struct(modelGenreData)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
 			return
 		}
 
-		if modelGenreData.TitleId <= 0 {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, errors.New("title id is required"), nil))
-			return
-		}
-
-		updateQuery := "UPDATE " + u.GetCollectionName() + " SET genres = array_remove(genres, $1) WHERE title_id = $2  AND $1 = ANY(genres)"
-		err := u.UpdateOne(u.GetDBName(), u.GetCollectionName(), string(updateQuery), []interface{}{modelGenreData.GenreId, modelGenreData.TitleId}, false)
+		updateQuery := `UPDATE ` + string(u.GetCollectionName()) + `
+						SET genres = CASE
+							WHEN array_length(genres, 1) > 1 THEN array_remove(genres, $1)
+							ELSE genres
+						END
+						WHERE title_id = $2 AND $1 = ANY(genres);`
+		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), string(updateQuery), []interface{}{modelGenreData.GenreId, modelGenreData.TitleId}, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))

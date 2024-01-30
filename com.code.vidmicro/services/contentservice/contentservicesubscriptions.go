@@ -153,7 +153,7 @@ func (ts ContentServiceSubscriptions) HandleTitleDeleted(msg *nats.Msg) {
 		converted := s.(map[string]interface{})
 		log.Println("HandleTitleDeleted:", converted)
 
-		titleData := models.TitlesSummary{Id: int(converted["Id"].(float64)), OriginalTitle: converted["original_title"].(string)}
+		titleData := models.TitlesSummary{Id: int(converted["Id"].(float64))}
 		controller, _ := basecontrollers.GetInstance().GetController(baseconst.TitlesSummary)
 		condition := map[string]interface{}{"id": titleData.Id}
 		controller.DeleteOne(controller.GetDBName(), controller.GetCollectionName(), condition, false, false)

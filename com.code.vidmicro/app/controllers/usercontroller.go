@@ -3,6 +3,7 @@ package controllers
 import (
 	//"com.code.vidmicro/com.code.vidmicro/app/middlewares"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,8 +82,7 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 		if err == nil && file != nil {
 			url, statusCode, err := s3uploader.GetInstance().UploadToSCW(file)
 			if err == nil {
-				modelUser.AvatarUrl.String = url
-				modelUser.AvatarUrl.Valid = true
+				modelUser.AvatarUrl = url
 			} else {
 				c.AbortWithStatusJSON(statusCode, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
 				return
@@ -117,18 +117,18 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
-		modelUser.Role = 1
+		modelUser.Role = 20
 		modelUser.CreatedAt = time.Now()
 		modelUser.UpdatedAt = time.Now()
 		modelUser.Password = utils.HashPassword(modelUser.Password, modelUser.Salt)
-		modelUser.VerificationToken.String = verificationToken
-		modelUser.VerificationToken.Valid = true
+		modelUser.VerificationToken = verificationToken
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
-		_, err = u.Add(u.GetDBName(), u.GetCollectionName(), modelUser, true)
+		userId, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelUser, true)
+		modelUser.Id = int(userId)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -165,17 +165,24 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 		session.Token = jwtToken
 		session.Name = modelUser.Name
 		session.Email = modelUser.Email
-		session.AvatarUrl = modelUser.AvatarUrl.String
+		session.AvatarUrl = modelUser.AvatarUrl
 		session.IsVerified = modelUser.IsVerified
 		session.Salt = modelUser.Salt
 		session.Role = modelUser.Role
 		session.UserId = int64(modelUser.Id)
 		session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
 
-		userSessionsController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
-		sessionQuery := "UPDATE " + string(userSessionsController.GetCollectionName()) + " SET user_id = $1 WHERE session_id = $2"
-		userSessionsController.UpdateOne(userSessionsController.GetDBName(), userSessionsController.GetCollectionName(), sessionQuery, []interface{}{modelUser.Id, session.SessionId}, false)
+		userSessionController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
+		query := `INSERT INTO users_sessions (user_id, session_id, created_at, expiring_at)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (session_id) DO UPDATE
+			SET user_id = $1;`
+		_, err = userSessionController.RawQuery(userSessionController.GetDBName(), userSessionController.GetCollectionName(), query, []interface{}{modelUser.Id, session.SessionId, session.CreatedAt, session.ExpiringAt})
 
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
 		cache.GetInstance().Set(session.SessionId, session.EncodeRedisData())
 
 		session.Salt = make([]byte, 0)
@@ -332,11 +339,14 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 			var user models.User
 
 			// Scan the row's values into the User struct.
-			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.AvatarUrl, &user.IsVerified, &user.Salt, &user.Role, &user.CreatedAt, &user.UpdatedAt)
+			avatarUrl := sql.NullString{}
+			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &avatarUrl, &user.IsVerified, &user.Salt, &user.Role, &user.CreatedAt, &user.UpdatedAt)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
 				return
 			}
+
+			user.AvatarUrl = avatarUrl.String
 
 			// Append the user to the slice.
 			users = append(users, user)
@@ -371,16 +381,24 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 			session.Token = jwtToken
 			session.Name = user.Name
 			session.Email = user.Email
-			session.AvatarUrl = user.AvatarUrl.String
+			session.AvatarUrl = user.AvatarUrl
 			session.IsVerified = user.IsVerified
 			session.Salt = user.Salt
 			session.Role = user.Role
 			session.UserId = int64(user.Id)
 			session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
 
-			userSessionsController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
-			sessionQuery := "UPDATE " + string(userSessionsController.GetCollectionName()) + " SET user_id = $1 WHERE session_id = $2"
-			userSessionsController.UpdateOne(userSessionsController.GetDBName(), userSessionsController.GetCollectionName(), sessionQuery, []interface{}{user.Id, session.SessionId}, false)
+			userSessionController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
+			query := `INSERT INTO users_sessions (user_id, session_id, created_at, expiring_at)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (session_id) DO UPDATE
+			SET user_id = $1;`
+			_, err = userSessionController.RawQuery(userSessionController.GetDBName(), userSessionController.GetCollectionName(), query, []interface{}{user.Id, session.SessionId, session.CreatedAt, session.ExpiringAt})
+
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+				return
+			}
 
 			cache.GetInstance().Set(sessionId, session.EncodeRedisData())
 
@@ -395,9 +413,10 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 	}
 }
 
-func (u *UserController) handleLoginEmail() gin.HandlerFunc {
+func (u *UserController) handleLogin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelUser := jsonmodels.LoginEmail{}
+
+		modelUser := jsonmodels.Login{}
 		if err := c.ShouldBindJSON(&modelUser); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
@@ -408,140 +427,124 @@ func (u *UserController) handleLoginEmail() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
 			return
 		}
-		u.handleLogin(c, models.User{Email: modelUser.Email, Password: modelUser.Password})
-	}
-}
 
-func (u *UserController) handleLoginUsername() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		modelUser := jsonmodels.LoginUsername{}
-		if err := c.ShouldBindJSON(&modelUser); err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
+		appendingQuery := " AND is_verified=TRUE AND black_listed=FALSE"
+		if configmanager.GetInstance().AllowUnverified {
+			appendingQuery = " AND black_listed=FALSE"
 		}
 
-		err := basevalidators.GetInstance().GetValidator().Struct(modelUser)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
-			return
-		}
-		u.handleLogin(c, models.User{Username: modelUser.Username, Password: modelUser.Password})
-	}
-}
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, role, salt, avatar_url, createdAt, updatedAt", map[string]interface{}{"username": modelUser.Username, "email": modelUser.Email}, &modelUser, true, appendingQuery, true)
 
-func (u *UserController) handleLogin(c *gin.Context, modelUser models.User) {
-
-	appendingQuery := " AND is_verified=TRUE AND black_listed=FALSE"
-	if configmanager.GetInstance().AllowUnverified {
-		appendingQuery = " AND black_listed=FALSE"
-	}
-
-	rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, role, salt, avatar_url, createdAt, updatedAt", map[string]interface{}{"username": modelUser.Username, "email": modelUser.Email}, &modelUser, true, appendingQuery, true)
-
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-		return
-	}
-	defer rows.Close()
-
-	var users []models.User
-
-	// Iterate over the rows.
-	for rows.Next() {
-		// Create a User struct to scan values into.
-		var user models.User
-
-		// Scan the row's values into the User struct.
-		err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.Role, &user.Salt, &user.AvatarUrl, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
+		defer rows.Close()
 
-		// Append the user to the slice.
-		users = append(users, user)
-	}
+		var users []models.User
 
-	// Check for errors from iterating over rows.
-	if err := rows.Err(); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-		return
-	}
+		// Iterate over the rows.
+		for rows.Next() {
+			// Create a User struct to scan values into.
+			var user models.User
 
-	if len(users) >= 1 { //Check the first user as username and email are unique
-		user := users[0]
-		password := utils.HashPassword(modelUser.Password, user.Salt)
-
-		if password == user.Password { //
-			jwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
-
+			avatarUrl := sql.NullString{}
+			// Scan the row's values into the User struct.
+			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.Role, &user.Salt, &avatarUrl, &user.CreatedAt, &user.UpdatedAt)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
+			user.AvatarUrl = avatarUrl.String
 
-			controller, _ := u.BaseControllerFactory.GetController(baseconst.RefreshToken)
-			refreshTokenController := controller.(*RefreshTokensController)
-			refreshToken, err := refreshTokenController.GetRefreshToken(user.Id)
-			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-				return
-			}
-			err = cache.GetInstance().SetString(refreshToken, jwtToken)
-			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-				return
-			}
+			// Append the user to the slice.
+			users = append(users, user)
+		}
 
-			var session models.Session
-			var sessionId string
-			if val, ok := c.Get("session"); ok {
-				session = val.(models.Session)
-			}
-			if val, ok := c.Get("session-id"); ok {
-				sessionId = val.(string)
-			}
-			session.Username = user.Username
-			session.Token = jwtToken
-			session.Name = user.Name
-			session.Email = user.Email
-			session.Password = user.Password
-			session.AvatarUrl = user.AvatarUrl.String
-			session.IsVerified = true
-			session.Salt = user.Salt
-			session.Role = user.Role
-			session.UserId = int64(user.Id)
-			session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
-
-			userSessionsController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
-			sessionQuery := "UPDATE " + string(userSessionsController.GetCollectionName()) + " SET user_id = $1 WHERE session_id = $2"
-			userSessionsController.UpdateOne(userSessionsController.GetDBName(), userSessionsController.GetCollectionName(), sessionQuery, []interface{}{user.Id, session.SessionId}, false)
-
-			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-				return
-			}
-
-			err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
-
-			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-				return
-			}
-
-			session.Salt = make([]byte, 0)
-			session.Token = ""
-			session.Password = ""
-			session.SessionId = ""
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]interface{}{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "Bearer", "user": session}))
-
-		} else {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.PASSWORD_MISMATCHED, err, nil))
+		// Check for errors from iterating over rows.
+		if err := rows.Err(); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
-	} else {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
-		return
+
+		if len(users) >= 1 { //Check the first user as username and email are unique
+			user := users[0]
+			password := utils.HashPassword(modelUser.Password, user.Salt)
+
+			if password == user.Password { //
+				jwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
+
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+					return
+				}
+
+				controller, _ := u.BaseControllerFactory.GetController(baseconst.RefreshToken)
+				refreshTokenController := controller.(*RefreshTokensController)
+				refreshToken, err := refreshTokenController.GetRefreshToken(user.Id)
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+					return
+				}
+				err = cache.GetInstance().SetString(refreshToken, jwtToken)
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+					return
+				}
+
+				var session models.Session
+				var sessionId string
+				if val, ok := c.Get("session"); ok {
+					session = val.(models.Session)
+				}
+				if val, ok := c.Get("session-id"); ok {
+					sessionId = val.(string)
+				}
+				session.Username = user.Username
+				session.Token = jwtToken
+				session.Name = user.Name
+				session.Email = user.Email
+				session.Password = user.Password
+				session.AvatarUrl = user.AvatarUrl
+				session.IsVerified = true
+				session.Salt = user.Salt
+				session.Role = user.Role
+				session.UserId = int64(user.Id)
+				session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
+
+				userSessionController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
+				query := `INSERT INTO users_sessions (user_id, session_id, created_at, expiring_at)
+						VALUES ($1, $2, $3, $4)
+						ON CONFLICT (session_id) DO UPDATE
+						SET user_id = $1;`
+				_, err = userSessionController.RawQuery(userSessionController.GetDBName(), userSessionController.GetCollectionName(), query, []interface{}{user.Id, session.SessionId, session.CreatedAt, session.ExpiringAt})
+
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+					return
+				}
+
+				err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
+
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+					return
+				}
+
+				session.Salt = make([]byte, 0)
+				session.Token = ""
+				session.Password = ""
+				session.SessionId = ""
+				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]interface{}{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "Bearer", "user": session}))
+
+			} else {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.PASSWORD_MISMATCHED, err, nil))
+				return
+			}
+		} else {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+			return
+		}
 	}
 }
 
@@ -613,25 +616,24 @@ func (u *UserController) handleGetUser() gin.HandlerFunc {
 
 func (u *UserController) handleBlackListUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelUser := models.User{}
+		modelUser := jsonmodels.BlackListUser{}
 		if err := c.ShouldBind(&modelUser); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath"), modelUser)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelUser)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		var currentSession models.Session
 		if val, ok := c.Get("session"); ok {
 			currentSession = val.(models.Session)
 		}
 
-		if currentSession.Username == modelUser.Username {
+		if int(currentSession.UserId) == modelUser.Id {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.FAILED_BLACK_LISTING, errors.New("can't black list your own user"), nil))
 			return
 		}
@@ -682,18 +684,17 @@ func (u *UserController) handleEditUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		setPart := " SET "
 		data := make([]interface{}, 0)
-		modelUser := models.User{}
+		modelUser := jsonmodels.EditUser{}
 		if err := c.ShouldBind(&modelUser); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath"), modelUser)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
+		err := basevalidators.GetInstance().GetValidator().Struct(modelUser)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
 
 		var currentSession models.Session
 		if val, ok := c.Get("session"); ok {
@@ -755,19 +756,23 @@ func (u *UserController) handleEditUser() gin.HandlerFunc {
 }
 func (u *UserController) handleResetPassword() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelUser := models.User{}
-		if err := c.ShouldBind(&modelUser); err != nil {
+		modelPassword := jsonmodels.ResetPassword{}
+		if err := c.ShouldBind(&modelPassword); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		// TODO:
-		// err := u.Validate(c.GetString("apiPath"), modelUser)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-		// 	return
-		// }
-		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, password_hash, role, salt", map[string]interface{}{"email": modelUser.Email}, &modelUser, true, " AND is_verified=TRUE AND black_listed=FALSE LIMIT 1", true)
+		err := basevalidators.GetInstance().GetValidator().Struct(modelPassword)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
+		var user models.User
+		appendingQuery := " AND is_verified=TRUE AND black_listed=FALSE"
+		if configmanager.GetInstance().AllowUnverified {
+			appendingQuery = " AND black_listed=FALSE"
+		}
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, password_hash, role, salt", map[string]interface{}{"email": modelPassword.Email}, &models.User{}, true, appendingQuery, true)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -776,30 +781,27 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 		defer rows.Close()
 
 		if rows.Next() {
-			var user models.User
-			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.PasswordHash, &user.Role, &user.Salt)
+			passwordHash := sql.NullString{}
+			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &passwordHash, &user.Role, &user.Salt)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
-
-			// Process the user data
-			modelUser = user
+			user.PasswordHash = passwordHash.String
 
 		} else {
 			// Handle the case when there are no rows
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.NOT_VARIFIED_USER, err, nil))
 			return
 		}
-		fmt.Println("check passwordHash from db: ", modelUser.PasswordHash)
+		fmt.Println("check passwordHash from db: ", user.PasswordHash)
 
-		if modelUser.PasswordHash.Valid {
-			ok, _ := utils.IsTokenValid(modelUser.PasswordHash.String)
+		if user.PasswordHash != "" {
+			ok, _ := utils.IsTokenValid(user.PasswordHash)
 			if ok {
 				c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.TOKEN_ALREADY_SENT, err, nil))
 				return
 			}
-			//TODO send email again
 			jwtToken, err := u.generateJWT(configmanager.GetInstance().PasswordTokenExpiry)
 
 			if err != nil {
@@ -807,9 +809,9 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 				return
 			}
 
-			emailBody := fmt.Sprintf(configmanager.GetInstance().ResetPasswordEmailBody, modelUser.Email, jwtToken)
+			emailBody := fmt.Sprintf(configmanager.GetInstance().ResetPasswordEmailBody, user.Email, jwtToken)
 
-			err = emails.GetInstance().SendVerificationEmail(modelUser.Email, configmanager.GetInstance().ResetPasswordEmailSubject, emailBody)
+			err = emails.GetInstance().SendVerificationEmail(user.Email, configmanager.GetInstance().ResetPasswordEmailSubject, emailBody)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.SEND_VERIFICATION_EMAIL_FAILED, err, nil))
 				return
@@ -826,16 +828,15 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 				return
 			}
 
-			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET password_hash=$1 WHERE email=$2", []interface{}{jwtToken, modelUser.Email}, true)
+			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET password_hash=$1 WHERE email=$2", []interface{}{jwtToken, user.Email}, true)
 
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
-			//TODO send email
-			emailBody := fmt.Sprintf(configmanager.GetInstance().ResetPasswordEmailBody, modelUser.Email, jwtToken)
+			emailBody := fmt.Sprintf(configmanager.GetInstance().ResetPasswordEmailBody, user.Email, jwtToken)
 
-			err = emails.GetInstance().SendVerificationEmail(modelUser.Email, configmanager.GetInstance().ResetPasswordEmailSubject, emailBody)
+			err = emails.GetInstance().SendVerificationEmail(user.Email, configmanager.GetInstance().ResetPasswordEmailSubject, emailBody)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SEND_VERIFICATION_EMAIL_FAILED, err, nil))
 				return
@@ -850,15 +851,24 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 
 func (u *UserController) handleVerifyPasswordHash() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		passwordHash := c.DefaultPostForm("password_hash", "")
-		newPassword := c.DefaultPostForm("new_password", "")
 
-		if passwordHash == "" || newPassword == "" {
-			// Handle the case where one or both fields are missing or empty
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.TOKEN_AND_NEW_PASSWORD_REQUIRED, errors.New("password or hash not declared"), nil))
+		modelUser := jsonmodels.VerifyPassword{}
+		if err := c.ShouldBind(&modelUser); err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
-		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, password_hash, role, salt", map[string]interface{}{"password_hash": passwordHash}, &models.User{}, true, " AND is_verified=TRUE AND black_listed=FALSE LIMIT 1", true)
+
+		err := basevalidators.GetInstance().GetValidator().Struct(modelUser)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
+
+		appendingQuery := " AND is_verified=TRUE AND black_listed=FALSE"
+		if configmanager.GetInstance().AllowUnverified {
+			appendingQuery = " AND black_listed=FALSE"
+		}
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, password_hash, role, salt", map[string]interface{}{"password_hash": modelUser.PasswordHash}, &models.User{}, true, appendingQuery, true)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -867,25 +877,22 @@ func (u *UserController) handleVerifyPasswordHash() gin.HandlerFunc {
 
 		var user models.User
 		if rows.Next() {
-			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.PasswordHash, &user.Role, &user.Salt)
+			passwordHash := sql.NullString{}
+			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &passwordHash, &user.Role, &user.Salt)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
+			user.PasswordHash = passwordHash.String
 
 		} else {
 			// Handle the case when there are no rows
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.NOT_VARIFIED_USER, err, nil))
 			return
 		}
-		if user.PasswordHash.String != passwordHash {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.INVALID_PASSWORD_TOKEN, err, nil))
-			return
-		}
 
-		user.Password = utils.HashPassword(newPassword, user.Salt)
-		user.PasswordHash.String = ""
-		user.PasswordHash.Valid = false
+		user.Password = utils.HashPassword(modelUser.NewPassword, user.Salt)
+		user.PasswordHash = ""
 
 		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET password = $1, password_hash=$2", []interface{}{user.Password, user.PasswordHash}, false)
 		if err != nil {
@@ -899,8 +906,7 @@ func (u *UserController) handleVerifyPasswordHash() gin.HandlerFunc {
 
 func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetOpenRouter().POST("/api/signup", u.handleRegisterUser())
-	baserouter.GetInstance().GetOpenRouter().POST("/api/loginEmail", u.handleLoginEmail())
-	baserouter.GetInstance().GetOpenRouter().POST("/api/loginUsername", u.handleLoginUsername())
+	baserouter.GetInstance().GetOpenRouter().POST("/api/login", u.handleLogin())
 	baserouter.GetInstance().GetOpenRouter().POST("/api/refreshToken", u.handleRefreshToken())
 	baserouter.GetInstance().GetLoginRouter().GET("/api/getUser", u.handleGetUser())
 	baserouter.GetInstance().GetLoginRouter().POST("/api/blackListUser", u.handleBlackListUser())
