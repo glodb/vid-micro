@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"com.code.vidmicro/com.code.vidmicro/database/baseconnections"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
@@ -53,6 +54,27 @@ func (u *PSqlFunctions) EnsureIndex(dbName basetypes.DBName, collectionName base
 	return err
 }
 
+func (u *PSqlFunctions) IsNull(value interface{}) bool {
+	switch v := value.(type) {
+	case time.Time:
+		// Check if it's a non-zero time value
+		if !v.IsZero() {
+			return false
+		} else {
+			return true
+		}
+	case string:
+		// Check if it's a non-empty string
+		if v != "" {
+			return false
+		} else {
+			return true
+		}
+	default:
+		return false
+	}
+}
+
 func (u *PSqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.CollectionName, data interface{}, scan bool) (int64, error) {
 	conn := baseconnections.GetInstance().GetConnection(basetypes.PSQL).GetDB(basetypes.PSQL).(*sql.DB)
 	query := "INSERT INTO " + string(collectionName)
@@ -84,16 +106,18 @@ func (u *PSqlFunctions) Add(dbName basetypes.DBName, collectionName basetypes.Co
 
 		value := dataValue.Field(i).Interface()
 
-		if strings.Contains(tagVal, "[]") {
-			values = append(values, pq.Array(value))
+		if value != nil && !u.IsNull(value) {
+			if strings.Contains(tagVal, "[]") {
+				values = append(values, pq.Array(value))
 
-		} else {
-			values = append(values, value)
+			} else {
+				values = append(values, value)
+			}
+
+			columns = append(columns, tag)
+			placeholders = append(placeholders, "$"+strconv.FormatInt(int64(placeholderCount), 10))
+			placeholderCount++
 		}
-
-		columns = append(columns, tag)
-		placeholders = append(placeholders, "$"+strconv.FormatInt(int64(placeholderCount), 10))
-		placeholderCount++
 	}
 
 	query += "(" + strings.Join(columns, ", ") + ")"
@@ -291,7 +315,7 @@ func (u *PSqlFunctions) Paginate(dbName basetypes.DBName, collectionName basetyp
 	return rows, count, err
 }
 
-func (u *PSqlFunctions) Count(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}) (int64, error) {
+func (u *PSqlFunctions) Count(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}, useOr bool) (int64, error) {
 	conn := baseconnections.GetInstance().GetConnection(basetypes.PSQL).GetDB(basetypes.PSQL).(*sql.DB)
 	whereClause := ""
 	values := make([]interface{}, 0)
@@ -300,7 +324,11 @@ func (u *PSqlFunctions) Count(dbName basetypes.DBName, collectionName basetypes.
 
 	for key, val := range condition {
 		if whereClause != "" {
-			whereClause += " AND "
+			if !useOr {
+				whereClause += " AND "
+			} else {
+				whereClause += " OR "
+			}
 		} else {
 			whereClause += " WHERE "
 		}

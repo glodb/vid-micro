@@ -1,6 +1,7 @@
 package responses
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"sync"
@@ -76,6 +77,9 @@ const (
 	GOOGLE_LOGIN_FAILED                      = 1061
 	FORBIDDEN                                = 1062
 	BAD_REQUEST                              = 1063
+	URL_GENERATED                            = 1064
+	VALIDATION_FAILED                        = 1065
+	USERNAME_OR_EMAIL_EXISTS                 = 1066
 )
 
 type Responses struct {
@@ -103,7 +107,7 @@ func (u *Responses) InitResponses() {
 	u.responses[WELCOME_TO_SSO] = "Welcome to VidMicro"
 	u.responses[NOT_FOUND] = "The Api is not available on current server"
 	u.responses[OPTIONS_NOT_ALLOWED] = "Options are not allowed"
-	u.responses[CREATE_SESSION_SUCCESS] = "Creating session successful"
+	u.responses[CREATE_SESSION_SUCCESS] = "Getting session successful"
 	u.responses[GENERATING_UUID_FAILED] = "Generating UUID failed"
 	u.responses[SESSION_ID_NOT_PRESENT] = "Session id is not present in header"
 	u.responses[SESSION_NOT_VALID] = "Session not valid"
@@ -161,6 +165,9 @@ func (u *Responses) InitResponses() {
 	u.responses[GOOGLE_LOGIN_FAILED] = "GOOGLE_LOGIN_FAILED"
 	u.responses[FORBIDDEN] = "FORBIDDEN"
 	u.responses[BAD_REQUEST] = "BAD_REQUEST"
+	u.responses[URL_GENERATED] = "URL_GENERATED"
+	u.responses[USERNAME_EXISTS_FAILED] = "User name or email already exists"
+	u.responses[VALIDATION_FAILED] = "Validation failed on the field"
 }
 
 // GetResponse returns the message for the particular response code
@@ -172,7 +179,7 @@ func (u *Responses) getResponse(code int) map[string]interface{} {
 	return message
 }
 
-func (u *Responses) WriteResponse(c *gin.Context, code int, err error, data interface{}) map[string]interface{} {
+func (u *Responses) WriteResponse(c *gin.Context, code int, err interface{}, data interface{}) map[string]interface{} {
 	returnMap := u.getResponse(code)
 	queryBytes, _ := sonic.Marshal(c.Request.URL.Query())
 
@@ -197,10 +204,21 @@ func (u *Responses) WriteResponse(c *gin.Context, code int, err error, data inte
 	}
 
 	if err != nil {
-		if configmanager.GetInstance().WriteError {
-			returnMap["error"] = err.Error()
+
+		switch val := err.(type) {
+		case error:
+			if configmanager.GetInstance().WriteError {
+				returnMap["error"] = val.Error()
+			}
+			auditTrial.Error = val.Error()
+		case map[string][]string:
+			returnMap["errors"] = val
+			jsonBytes, _ := sonic.Marshal(val)
+			auditTrial.Error = string(jsonBytes)
+		default:
+			fmt.Println("Not supported type of errors")
 		}
-		auditTrial.Error = err.Error()
+
 	}
 
 	if data != nil {

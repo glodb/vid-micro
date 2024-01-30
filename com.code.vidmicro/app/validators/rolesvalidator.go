@@ -3,6 +3,6 @@ package validators
 type RolesValidator struct {
 }
 
-func (u *RolesValidator) Validate(apiName string, data interface{}) error {
+func (u *RolesValidator) GetRules(apiName string) map[string]interface{} {
 	return nil
 }

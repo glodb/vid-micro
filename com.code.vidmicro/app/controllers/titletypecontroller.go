@@ -85,11 +85,12 @@ func (u *TitleTypeController) handleCreateTitleType() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/put", modelTitleType)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/put", modelTitleType)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelTitleType, true)
 		modelTitleType.Id = int(id)
 
@@ -113,11 +114,12 @@ func (u *TitleTypeController) handleGetTitleType() gin.HandlerFunc {
 		id, _ := strconv.ParseInt(c.Query("id"), 10, 64)
 		modelTitleType.Id = int(id)
 
-		err := u.Validate(c.GetString("apiPath")+"/get", modelTitleType)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/get", modelTitleType)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
 		query := map[string]interface{}{"id": modelTitleType.Id}
 
@@ -161,13 +163,14 @@ func (u *TitleTypeController) handleUpdateTitleType() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/post", modelTitleType)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/post", modelTitleType)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
-		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1, slug = $2 WHERE id = $3", []interface{}{modelTitleType.Name, modelTitleType.Slug, modelTitleType.Id}, false)
+		err := u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1, slug = $2 WHERE id = $3", []interface{}{modelTitleType.Name, modelTitleType.Slug, modelTitleType.Id}, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -192,13 +195,14 @@ func (u *TitleTypeController) handleDeleteTitleType() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/post", modelTitleType)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/post", modelTitleType)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
-		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelTitleType.Id}, false, false)
+		err := u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelTitleType.Id}, false, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))

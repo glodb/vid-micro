@@ -77,11 +77,12 @@ func (u *TitlesSummaryController) handleGetTitles() gin.HandlerFunc {
 		pageString := c.Query("page")
 		modelTitles.Id = int(id)
 
-		err := u.Validate(c.GetString("apiPath")+"/get", modelTitles)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/get", modelTitles)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
 		query := map[string]interface{}{"id": modelTitles.Id}
 

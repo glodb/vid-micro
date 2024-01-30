@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -43,6 +44,14 @@ func (u *SessionController) SetBaseFunctions(inter basefunctions.BaseFucntionsIn
 
 func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 	return func(c *gin.Context) {
+
+		savedModel, err := u.retrieveCookie(c)
+
+		if err == nil {
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_SESSION_SUCCESS, err, savedModel))
+			return
+		}
+
 		sessionId, err := utils.GenerateUUID()
 		modelSession := models.Session{
 			SessionId: sessionId,
@@ -68,6 +77,9 @@ func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 			return
 		}
 
+		// Set a cookie
+		c.SetCookie(configmanager.GetInstance().CookieName, sessionId, int(configmanager.GetInstance().SessionExpirySeconds), configmanager.GetInstance().CookiePath, configmanager.GetInstance().CookieDomain, false, true)
+
 		userSession := models.UserSessions{SessionId: sessionId, CreatedAt: modelSession.CreatedAt, ExpiringAt: modelSession.ExpiringAt}
 
 		userSessionController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
@@ -82,6 +94,23 @@ func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 	}
 }
 
+func (u *SessionController) retrieveCookie(c *gin.Context) (models.Session, error) {
+	cookieValue, err := c.Cookie(configmanager.GetInstance().CookieName)
+
+	if err != nil {
+		return models.Session{}, err
+	}
+	var session models.Session
+	data, err := cache.GetInstance().Get(cookieValue)
+	if err != nil || len(data) == 0 {
+		return models.Session{}, errors.New("cookie not valid")
+	} else {
+		session.DecodeRedisData(data)
+	}
+
+	return models.Session{SessionId: session.SessionId, CreatedAt: session.CreatedAt, ExpiringAt: session.ExpiringAt}, nil
+}
+
 func (u SessionController) RegisterApis() {
-	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/createSession", u.handleCreateSession())
+	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/getSession", u.handleCreateSession())
 }

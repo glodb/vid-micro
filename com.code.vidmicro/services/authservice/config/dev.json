@@ -34,9 +34,10 @@
         "scopes": ["https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email"]
     },    
     "apis": {
-        "/api/createSession":["GET"],
+        "/api/getSession":["GET"],
         "/api/signup":["POST"],
-        "/api/login":["POST"],
+        "/api/loginEmail":["POST"],
+        "/api/loginUsername":["POST"],
         "/api/refreshToken":["POST"],
         "/api/getUser":["GET"],
         "/api/blackListUser":["POST"],
@@ -67,5 +68,9 @@
     },
     "sessionExpirySeconds":6000000,
     "PasswordTokenExpiry": 20,
-    "googleUserInfoLink" : "https://www.googleapis.com/oauth2/v2/userinfo"
+    "googleUserInfoLink" : "https://www.googleapis.com/oauth2/v2/userinfo",
+    "cookieName":"vidmicro_cookie",
+    "cookieDomain":"localhost",
+    "cookiePath":"/",
+    "allowUnverified": true
 }

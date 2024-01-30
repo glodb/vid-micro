@@ -28,6 +28,7 @@ COPY --from=build_base /app/config /app/config
 COPY --from=build_base /app/com.code.vidmicro/services/authservice/config /app/com.code.vidmicro/services/authservice/config
 COPY --from=build_base /app/com.code.vidmicro/services/contentservice/config /app/com.code.vidmicro/services/contentservice/config
 COPY --from=build_base /app/com.code.vidmicro/services/titlesservice/config /app/com.code.vidmicro/services/titlesservice/config
+COPY --from=build_base /app/com.code.vidmicro/services/sessionscleanerservice/config/ /app/com.code.vidmicro/services/sessionscleanerservice/config/
 
 # Run the binary program produced by `go install`
 ENTRYPOINT ["./vidmicro"]

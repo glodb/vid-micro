@@ -3,6 +3,6 @@ package validators
 type SessionValidator struct {
 }
 
-func (u *SessionValidator) Validate(apiName string, data interface{}) error {
+func (u *SessionValidator) GetRules(apiName string) map[string]interface{} {
 	return nil
 }

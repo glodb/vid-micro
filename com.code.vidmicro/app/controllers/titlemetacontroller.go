@@ -88,11 +88,12 @@ func (u *TitleMetaController) handleCreateTitleMeta() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/put", modelTitleMeta)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/put", modelTitleMeta)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
 		title, titleType, genres, genreObject, statusCode, err := u.GetMetaDataRecordData(modelTitleMeta.TitleId, modelTitleMeta.Genres, modelTitleMeta.TypeId)
 
@@ -148,11 +149,12 @@ func (u *TitleMetaController) handleGetTitleMeta() gin.HandlerFunc {
 		id, _ := strconv.ParseInt(c.Query("title_id"), 10, 64)
 		modelTitleMeta.TitleId = int(id)
 
-		err := u.Validate(c.GetString("apiPath")+"/get", modelTitleMeta)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/get", modelTitleMeta)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
 		meilisearchRecord := models.MeilisearchTitle{}
 		data, err := cache.GetInstance().Get(fmt.Sprintf("%d%s%s", modelTitleMeta.TitleId, configmanager.GetInstance().RedisSeprator, configmanager.GetInstance().TitlesMetaPostfix))
@@ -236,11 +238,12 @@ func (u *TitleMetaController) handleUpdateTitleMeta() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/post", modelTitleMeta)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/post", modelTitleMeta)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
 		meiliSearchUpdate.Id = modelTitleMeta.TitleId
 		data := make([]interface{}, 0)
@@ -312,7 +315,7 @@ func (u *TitleMetaController) handleUpdateTitleMeta() gin.HandlerFunc {
 			setPart += " WHERE id =$" + lengthString
 			data = append(data, modelTitleMeta.TitleId)
 
-			err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+setPart, data, false)
+			err := u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+setPart, data, false)
 
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -324,7 +327,7 @@ func (u *TitleMetaController) handleUpdateTitleMeta() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.UPDATE_SUCCESS, err, nil))
 			return
 		}
-		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.NOTHIN_TO_UPDATE, err, nil))
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.NOTHIN_TO_UPDATE, nil, nil))
 	}
 }
 
@@ -336,13 +339,14 @@ func (u *TitleMetaController) handleDeleteTitleMeta() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/post", modelTitleMeta)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/post", modelTitleMeta)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
-		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"title_id": modelTitleMeta.TitleId}, false, false)
+		err := u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"title_id": modelTitleMeta.TitleId}, false, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))

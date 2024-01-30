@@ -1,0 +1,14 @@
+{
+    "database": {
+        "dbname": "auth"
+    },
+    "microServiceName": "sessionsCleanerService",
+    "allowDB": true,
+    "serviceLogName": "sCleaner",
+    "publishingTopics": [
+    ],
+    "subscribedTopics": {
+    }, 
+    "apis": {
+    }
+}

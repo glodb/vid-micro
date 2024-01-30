@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"com.code.vidmicro/com.code.vidmicro/app/models"
+	"com.code.vidmicro/com.code.vidmicro/app/models/jsonmodels"
 	"com.code.vidmicro/com.code.vidmicro/database/basefunctions"
 	"com.code.vidmicro/com.code.vidmicro/database/basetypes"
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basecontrollers/baseconst"
@@ -80,16 +81,28 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 		if err == nil && file != nil {
 			url, statusCode, err := s3uploader.GetInstance().UploadToSCW(file)
 			if err == nil {
-				modelUser.AvatarUrl = url
+				modelUser.AvatarUrl.String = url
+				modelUser.AvatarUrl.Valid = true
 			} else {
 				c.AbortWithStatusJSON(statusCode, responses.GetInstance().WriteResponse(c, responses.UPLOADING_AVATAR_FAILED, err, nil))
 				return
 			}
 		}
 
-		err = u.Validate(c.GetString("apiPath"), modelUser)
+		err = basevalidators.GetInstance().GetValidator().Struct(modelUser)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
+
+		count, err := u.Count(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"username": modelUser.Username, "email": modelUser.Email}, true)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
+
+		if count > 0 {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.USERNAME_OR_EMAIL_EXISTS, err, nil))
 			return
 		}
 
@@ -108,7 +121,8 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 		modelUser.CreatedAt = time.Now()
 		modelUser.UpdatedAt = time.Now()
 		modelUser.Password = utils.HashPassword(modelUser.Password, modelUser.Salt)
-		modelUser.VerificationToken = verificationToken
+		modelUser.VerificationToken.String = verificationToken
+		modelUser.VerificationToken.Valid = true
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -130,7 +144,46 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 			return
 		}
 
-		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.REGISTER_USER_SUCCESS, err, nil))
+		controller, _ := u.BaseControllerFactory.GetController(baseconst.RefreshToken)
+		refreshTokenController := controller.(*RefreshTokensController)
+		refreshToken, err := refreshTokenController.GetRefreshToken(modelUser.Id)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
+
+		jwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
+		var session models.Session
+		if val, ok := c.Get("session"); ok {
+			session = val.(models.Session)
+		}
+		session.Username = modelUser.Username
+		session.Token = jwtToken
+		session.Name = modelUser.Name
+		session.Email = modelUser.Email
+		session.AvatarUrl = modelUser.AvatarUrl.String
+		session.IsVerified = modelUser.IsVerified
+		session.Salt = modelUser.Salt
+		session.Role = modelUser.Role
+		session.UserId = int64(modelUser.Id)
+		session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
+
+		userSessionsController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
+		sessionQuery := "UPDATE " + string(userSessionsController.GetCollectionName()) + " SET user_id = $1 WHERE session_id = $2"
+		userSessionsController.UpdateOne(userSessionsController.GetDBName(), userSessionsController.GetCollectionName(), sessionQuery, []interface{}{modelUser.Id, session.SessionId}, false)
+
+		cache.GetInstance().Set(session.SessionId, session.EncodeRedisData())
+
+		session.Salt = make([]byte, 0)
+		session.Token = ""
+		session.Password = ""
+		session.SessionId = ""
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.REGISTER_USER_SUCCESS, err, map[string]interface{}{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": modelUser.Username, "tokenType": "Bearer", "user": session}))
+
 	}
 }
 
@@ -196,7 +249,8 @@ func (u *UserController) handleGoogleLogin() gin.HandlerFunc {
 		}
 		url := configSet.AuthCodeURL(sessionId)
 		log.Println("Generated URL:", url)
-		c.Redirect(http.StatusSeeOther, url)
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.URL_GENERATED, err, map[string]interface{}{"redirect_url": url}))
+		// c.Redirect(http.StatusSeeOther, url)
 	}
 }
 
@@ -317,7 +371,7 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 			session.Token = jwtToken
 			session.Name = user.Name
 			session.Email = user.Email
-			session.AvatarUrl = user.AvatarUrl
+			session.AvatarUrl = user.AvatarUrl.String
 			session.IsVerified = user.IsVerified
 			session.Salt = user.Salt
 			session.Role = user.Role
@@ -341,127 +395,153 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 	}
 }
 
-func (u *UserController) handleLogin() gin.HandlerFunc {
+func (u *UserController) handleLoginEmail() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		modelUser := models.User{}
+		modelUser := jsonmodels.LoginEmail{}
 		if err := c.ShouldBindJSON(&modelUser); err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath"), modelUser)
+		err := basevalidators.GetInstance().GetValidator().Struct(modelUser)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadGateway, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
+		u.handleLogin(c, models.User{Email: modelUser.Email, Password: modelUser.Password})
+	}
+}
+
+func (u *UserController) handleLoginUsername() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		modelUser := jsonmodels.LoginUsername{}
+		if err := c.ShouldBindJSON(&modelUser); err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
 
-		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, role, salt, avatar_url, createdAt, updatedAt", map[string]interface{}{"username": modelUser.Username, "email": modelUser.Email}, &modelUser, true, " AND is_verified=TRUE AND black_listed=FALSE", true)
+		err := basevalidators.GetInstance().GetValidator().Struct(modelUser)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.VALIDATION_FAILED, basevalidators.GetInstance().CreateErrors(err), nil))
+			return
+		}
+		u.handleLogin(c, models.User{Username: modelUser.Username, Password: modelUser.Password})
+	}
+}
 
+func (u *UserController) handleLogin(c *gin.Context, modelUser models.User) {
+
+	appendingQuery := " AND is_verified=TRUE AND black_listed=FALSE"
+	if configmanager.GetInstance().AllowUnverified {
+		appendingQuery = " AND black_listed=FALSE"
+	}
+
+	rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, role, salt, avatar_url, createdAt, updatedAt", map[string]interface{}{"username": modelUser.Username, "email": modelUser.Email}, &modelUser, true, appendingQuery, true)
+
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+		return
+	}
+	defer rows.Close()
+
+	var users []models.User
+
+	// Iterate over the rows.
+	for rows.Next() {
+		// Create a User struct to scan values into.
+		var user models.User
+
+		// Scan the row's values into the User struct.
+		err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.Role, &user.Salt, &user.AvatarUrl, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
-		defer rows.Close()
 
-		var users []models.User
+		// Append the user to the slice.
+		users = append(users, user)
+	}
 
-		// Iterate over the rows.
-		for rows.Next() {
-			// Create a User struct to scan values into.
-			var user models.User
+	// Check for errors from iterating over rows.
+	if err := rows.Err(); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+		return
+	}
 
-			// Scan the row's values into the User struct.
-			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &user.Password, &user.Role, &user.Salt, &user.AvatarUrl, &user.CreatedAt, &user.UpdatedAt)
+	if len(users) >= 1 { //Check the first user as username and email are unique
+		user := users[0]
+		password := utils.HashPassword(modelUser.Password, user.Salt)
+
+		if password == user.Password { //
+			jwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
+
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
 
-			// Append the user to the slice.
-			users = append(users, user)
-		}
-
-		// Check for errors from iterating over rows.
-		if err := rows.Err(); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-			return
-		}
-
-		if len(users) >= 1 { //Check the first user as username and email are unique
-			user := users[0]
-			password := utils.HashPassword(modelUser.Password, user.Salt)
-
-			if password == user.Password { //
-				jwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
-
-				if err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-					return
-				}
-
-				controller, _ := u.BaseControllerFactory.GetController(baseconst.RefreshToken)
-				refreshTokenController := controller.(*RefreshTokensController)
-				refreshToken, err := refreshTokenController.GetRefreshToken(user.Id)
-				if err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-					return
-				}
-				err = cache.GetInstance().SetString(refreshToken, jwtToken)
-				if err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-					return
-				}
-
-				var session models.Session
-				var sessionId string
-				if val, ok := c.Get("session"); ok {
-					session = val.(models.Session)
-				}
-				if val, ok := c.Get("session-id"); ok {
-					sessionId = val.(string)
-				}
-				session.Username = user.Username
-				session.Token = jwtToken
-				session.Name = user.Name
-				session.Email = user.Email
-				session.Password = user.Password
-				session.AvatarUrl = user.AvatarUrl
-				session.IsVerified = true
-				session.Salt = user.Salt
-				session.Role = user.Role
-				session.UserId = int64(user.Id)
-				session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
-
-				userSessionsController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
-				sessionQuery := "UPDATE " + string(userSessionsController.GetCollectionName()) + " SET user_id = $1 WHERE session_id = $2"
-				userSessionsController.UpdateOne(userSessionsController.GetDBName(), userSessionsController.GetCollectionName(), sessionQuery, []interface{}{user.Id, session.SessionId}, false)
-
-				if err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-					return
-				}
-
-				err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
-
-				if err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-					return
-				}
-
-				session.Salt = make([]byte, 0)
-				session.Token = ""
-				session.Password = ""
-				session.SessionId = ""
-				c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]interface{}{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "Bearer", "user": session}))
-
-			} else {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.PASSWORD_MISMATCHED, err, nil))
+			controller, _ := u.BaseControllerFactory.GetController(baseconst.RefreshToken)
+			refreshTokenController := controller.(*RefreshTokensController)
+			refreshToken, err := refreshTokenController.GetRefreshToken(user.Id)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 				return
 			}
+			err = cache.GetInstance().SetString(refreshToken, jwtToken)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+				return
+			}
+
+			var session models.Session
+			var sessionId string
+			if val, ok := c.Get("session"); ok {
+				session = val.(models.Session)
+			}
+			if val, ok := c.Get("session-id"); ok {
+				sessionId = val.(string)
+			}
+			session.Username = user.Username
+			session.Token = jwtToken
+			session.Name = user.Name
+			session.Email = user.Email
+			session.Password = user.Password
+			session.AvatarUrl = user.AvatarUrl.String
+			session.IsVerified = true
+			session.Salt = user.Salt
+			session.Role = user.Role
+			session.UserId = int64(user.Id)
+			session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
+
+			userSessionsController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
+			sessionQuery := "UPDATE " + string(userSessionsController.GetCollectionName()) + " SET user_id = $1 WHERE session_id = $2"
+			userSessionsController.UpdateOne(userSessionsController.GetDBName(), userSessionsController.GetCollectionName(), sessionQuery, []interface{}{user.Id, session.SessionId}, false)
+
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+				return
+			}
+
+			err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
+
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+				return
+			}
+
+			session.Salt = make([]byte, 0)
+			session.Token = ""
+			session.Password = ""
+			session.SessionId = ""
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]interface{}{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "Bearer", "user": session}))
+
 		} else {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+			c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.PASSWORD_MISMATCHED, err, nil))
 			return
 		}
+	} else {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.ERROR_READING_USER, err, nil))
+		return
 	}
 }
 
@@ -539,11 +619,12 @@ func (u *UserController) handleBlackListUser() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath"), modelUser)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath"), modelUser)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
 		var currentSession models.Session
 		if val, ok := c.Get("session"); ok {
@@ -607,11 +688,12 @@ func (u *UserController) handleEditUser() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath"), modelUser)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath"), modelUser)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
 		var currentSession models.Session
 		if val, ok := c.Get("session"); ok {
@@ -625,7 +707,8 @@ func (u *UserController) handleEditUser() gin.HandlerFunc {
 			if err == nil {
 
 				if currentSession.AvatarUrl != url {
-					modelUser.AvatarUrl = url
+					modelUser.AvatarUrl.String = url
+					modelUser.AvatarUrl.Valid = true
 					currentSession.AvatarUrl = url
 					setPart += "avatar_url = $1"
 					data = append(data, url)
@@ -678,11 +761,12 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath"), modelUser)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath"), modelUser)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), "id, username,name, email, password, password_hash, role, salt", map[string]interface{}{"email": modelUser.Email}, &modelUser, true, " AND is_verified=TRUE AND black_listed=FALSE LIMIT 1", true)
 
 		if err != nil {
@@ -709,8 +793,8 @@ func (u *UserController) handleResetPassword() gin.HandlerFunc {
 		}
 		fmt.Println("check passwordHash from db: ", modelUser.PasswordHash)
 
-		if modelUser.PasswordHash != "" {
-			ok, _ := utils.IsTokenValid(modelUser.PasswordHash)
+		if modelUser.PasswordHash.Valid {
+			ok, _ := utils.IsTokenValid(modelUser.PasswordHash.String)
 			if ok {
 				c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.TOKEN_ALREADY_SENT, err, nil))
 				return
@@ -794,13 +878,14 @@ func (u *UserController) handleVerifyPasswordHash() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.NOT_VARIFIED_USER, err, nil))
 			return
 		}
-		if user.PasswordHash != passwordHash {
+		if user.PasswordHash.String != passwordHash {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.INVALID_PASSWORD_TOKEN, err, nil))
 			return
 		}
 
 		user.Password = utils.HashPassword(newPassword, user.Salt)
-		user.PasswordHash = ""
+		user.PasswordHash.String = ""
+		user.PasswordHash.Valid = false
 
 		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET password = $1, password_hash=$2", []interface{}{user.Password, user.PasswordHash}, false)
 		if err != nil {
@@ -814,7 +899,8 @@ func (u *UserController) handleVerifyPasswordHash() gin.HandlerFunc {
 
 func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetOpenRouter().POST("/api/signup", u.handleRegisterUser())
-	baserouter.GetInstance().GetOpenRouter().POST("/api/login", u.handleLogin())
+	baserouter.GetInstance().GetOpenRouter().POST("/api/loginEmail", u.handleLoginEmail())
+	baserouter.GetInstance().GetOpenRouter().POST("/api/loginUsername", u.handleLoginUsername())
 	baserouter.GetInstance().GetOpenRouter().POST("/api/refreshToken", u.handleRefreshToken())
 	baserouter.GetInstance().GetLoginRouter().GET("/api/getUser", u.handleGetUser())
 	baserouter.GetInstance().GetLoginRouter().POST("/api/blackListUser", u.handleBlackListUser())

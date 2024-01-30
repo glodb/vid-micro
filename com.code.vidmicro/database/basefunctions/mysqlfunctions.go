@@ -54,7 +54,7 @@ func (u *MySqlFunctions) Paginate(dbName basetypes.DBName, collectionName basety
 	return nil, -1, errors.New("unimplemented exception")
 }
 
-func (u *MySqlFunctions) Count(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}) (int64, error) {
+func (u *MySqlFunctions) Count(dbName basetypes.DBName, collectionName basetypes.CollectionName, condition map[string]interface{}, useOr bool) (int64, error) {
 	return -1, nil
 }
 

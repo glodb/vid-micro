@@ -3,6 +3,6 @@ package validators
 type RefreshTokensValidator struct {
 }
 
-func (u *RefreshTokensValidator) Validate(apiName string, data interface{}) error {
+func (u *RefreshTokensValidator) GetRules(apiName string) map[string]interface{} {
 	return nil
 }

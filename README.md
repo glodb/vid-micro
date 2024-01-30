@@ -2,6 +2,7 @@
 go run main.go -env=DEV -con=AUTHSERVICE
 go run main.go -env=DEV -con=TITLESSERVICE
 go run main.go -env=DEV -con=CONTENTSERVICE
+go run main.go -env=DEV -con=SESSIONSCLEANERSERVICE
 
 
 ## Compiling the docker file
@@ -15,6 +16,9 @@ sudo docker run --log-opt max-size=10m --log-opt max-file=3 -d --network host --
 
 ## Running ContentService
 sudo docker run --log-opt max-size=10m --log-opt max-file=3 -d --network host --restart unless-stopped --name contentservice vidmicro -env=DEV -con=CONTENTSERVICE
+
+## Running SessionService
+sudo docker run --log-opt max-size=10m --log-opt max-file=3 -d --network host --restart unless-stopped --name sessionscleanerservice vidmicro -env=DEV -con=SESSIONSCLEANERSERVICE
 
 ## Applications to start on local machine
 sudo docker start nats-server

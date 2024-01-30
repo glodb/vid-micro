@@ -85,11 +85,12 @@ func (u *GenresController) handleCreateGenre() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/put", modelGenre)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/put", modelGenre)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 		id, err := u.Add(u.GetDBName(), u.GetCollectionName(), modelGenre, true)
 		modelGenre.Id = int(id)
 
@@ -113,11 +114,12 @@ func (u *GenresController) handleGetGenre() gin.HandlerFunc {
 		id, _ := strconv.ParseInt(c.Query("id"), 10, 64)
 		modelGenre.Id = int(id)
 
-		err := u.Validate(c.GetString("apiPath")+"/get", modelGenre)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/get", modelGenre)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
 		query := map[string]interface{}{"id": modelGenre.Id}
 
@@ -160,13 +162,14 @@ func (u *GenresController) handleUpdateGenre() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/post", modelGenre)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/post", modelGenre)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
-		err = u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1 WHERE id = $2", []interface{}{modelGenre.Name, modelGenre.Id}, false)
+		err := u.UpdateOne(u.GetDBName(), u.GetCollectionName(), "UPDATE "+string(u.GetCollectionName())+" SET name = $1 WHERE id = $2", []interface{}{modelGenre.Name, modelGenre.Id}, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
@@ -189,13 +192,14 @@ func (u *GenresController) handleDeleteGenre() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/post", modelGenre)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/post", modelGenre)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
-		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelGenre.Id}, false, false)
+		err := u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelGenre.Id}, false, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))

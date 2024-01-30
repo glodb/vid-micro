@@ -13,7 +13,7 @@
     "subscribedTopics": {
     },
     "apis": {
-        "/api/createSession":["GET"],
+        "/api/getSession":["GET"],
         "/api/signup":["POST"],
         "/api/login":["POST"],
         "/api/refreshToken":["POST"],

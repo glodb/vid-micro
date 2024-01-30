@@ -97,12 +97,12 @@ func (u *ContentController) handleCreateContent() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
 			return
 		}
-
-		err := u.Validate(c.GetString("apiPath")+"/put", modelContent)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/put", modelContent)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
 		if !u.validateTitleLanguage(modelContent) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.LANGUAGE_NOT_ADDED_IN_TITLE, errors.New("validating language failed"), nil))
@@ -189,12 +189,13 @@ func (u *ContentController) handleGetContent() gin.HandlerFunc {
 			modelContent.TypeId = int(idType)
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/get", modelContent)
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/get", modelContent)
 
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
 		if pageString != "" {
 			pageInt, _ := strconv.ParseInt(c.Query("page"), 10, 64)
@@ -300,11 +301,12 @@ func (u *ContentController) handleUpdateContent() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/post", modelContent)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/post", modelContent)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
 		file, err := c.FormFile("image")
 
@@ -412,13 +414,14 @@ func (u *ContentController) handleDeleteContent() gin.HandlerFunc {
 			return
 		}
 
-		err := u.Validate(c.GetString("apiPath")+"/delete", modelContent)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
-			return
-		}
+		// TODO:
+		// err := u.Validate(c.GetString("apiPath")+"/delete", modelContent)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.BAD_REQUEST, err, nil))
+		// 	return
+		// }
 
-		err = u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelContent.Id}, false, false)
+		err := u.DeleteOne(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"id": modelContent.Id}, false, false)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))

@@ -67,6 +67,10 @@ type config struct {
 	GoogleLoginConfig            configModels.GoogleLoginConfig `json:"googleLoginConfig"`
 	GoogleUserInfoLink           string                         `json:"googleUserInfoLink"`
 	WriteError                   bool                           `json:"writeError"`
+	CookieName                   string                         `json:"cookieName"`
+	CookieDomain                 string                         `json:"cookieDomain"`
+	CookiePath                   string                         `json:"cookiePath"`
+	AllowUnverified              bool                           `json:"allowUnverified"`
 	Acl                          map[string]map[string]*utilsdatatypes.Set
 	Apis                         map[string]*utilsdatatypes.Set
 	PasswordTokenExpiry          int64
@@ -167,6 +171,8 @@ func (c *config) getConfigNameAndPath() (string, string, string) {
 		conPath = "com.code.vidmicro/services/titlesservice/config/"
 	case "CONTENTSERVICE":
 		conPath = "com.code.vidmicro/services/contentservice/config/"
+	case "SESSIONSCLEANERSERVICE":
+		conPath = "com.code.vidmicro/services/sessionscleanerservice/config/"
 	}
 
 	return conName, conPath, *configPath
