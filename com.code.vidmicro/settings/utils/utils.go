@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -32,6 +33,20 @@ func InterfaceArrayToIntArray(floatArray []interface{}) []int {
 	}
 
 	return intArray
+}
+
+const base64xCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+func EncodeBase64x(input string) string {
+	var result strings.Builder
+
+	for _, char := range input {
+		// Convert the character to its ASCII code and represent it using base64xCharset
+		index := int(char) % len(base64xCharset)
+		result.WriteByte(base64xCharset[index])
+	}
+
+	return result.String()
 }
 
 func GenerateUUID() (string, error) {
@@ -270,4 +285,25 @@ func IsTokenValid(tokenString string) (bool, error) {
 	} else {
 		return false, errors.New("error parsing token")
 	}
+}
+
+const (
+	uppercaseChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	lowercaseChars = "abcdefghijklmnopqrstuvwxyz"
+	numberChars    = "0123456789"
+)
+
+func GenerateRandomString(length int) (string, error) {
+	allChars := uppercaseChars + lowercaseChars + numberChars
+	var result string
+
+	for i := 0; i < length; i++ {
+		randomIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(allChars))))
+		if err != nil {
+			return "", err
+		}
+		result += string(allChars[randomIndex.Int64()])
+	}
+
+	return result, nil
 }
