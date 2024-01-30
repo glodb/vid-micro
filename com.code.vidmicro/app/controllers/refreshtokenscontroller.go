@@ -8,14 +8,12 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/basevalidators"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
-	"github.com/chenzhuoyu/base64x"
 )
 
 type RefreshTokensController struct {
 	baseinterfaces.BaseControllerFactory
 	basefunctions.BaseFucntionsInterface
 	basevalidators.ValidatorInterface
-	encoding base64x.Encoding
 }
 
 func (u RefreshTokensController) GetDBName() basetypes.DBName {
@@ -59,7 +57,7 @@ func (u *RefreshTokensController) GetRefreshToken(userId int) (string, error) {
 	}
 
 	stringToken, _ = utils.GenerateUUID()
-	stringToken = u.encoding.EncodeToString([]byte(stringToken))
+	stringToken, _ = utils.GenerateRandomString(64)
 	token := models.RefreshToken{
 		RefreshToken: stringToken,
 		UserId:       userId,
@@ -74,7 +72,7 @@ func (u *RefreshTokensController) GetRefreshToken(userId int) (string, error) {
 
 func (u *RefreshTokensController) ValidateRefreshToken(token string) (bool, error) {
 
-	rowsCount, err := u.Count(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"refresh_token": token})
+	rowsCount, err := u.Count(u.GetDBName(), u.GetCollectionName(), map[string]interface{}{"refresh_token": token}, false)
 
 	if err != nil {
 		return false, err
