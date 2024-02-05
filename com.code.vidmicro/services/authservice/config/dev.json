@@ -12,7 +12,17 @@
     ],
     "subscribedTopics": {
     },
-    "emailVerificationURL": "http://localhost:8080/api/verifyEmail/",
+    "twitterAuthConfig": {
+        "twitterCallbackUrl": "http://127.0.0.1:8080/api/twitterCallback",
+        "twitterConsumerKey"     :"qOrLVqeIaRSNQ4rdP7B42wcyj",
+        "twitterConsumerSecret"  :"Ui8FyTdhkgPArAlBGqOtsK3LQNL4A3eAYyjBE4l4zTmG296aSR",
+        "twitterRequestTokenUrl" : "https://api.twitter.com/oauth/request_token",
+        "twitterAuthorizeURL"    : "https://api.twitter.com/oauth/authorize",
+        "twitterAccessTokenUrl":    "https://api.twitter.com/oauth/access_token",
+        "twitterUserInfoUrl": "https://api.twitter.com/1.1/account/verify_credentials.json?include_email=true"
+    },
+
+    "emailVerificationUrl": "http://localhost:8080/api/verifyEmail/",
     "emailBody": "Hi %s! Please verify your email address by clicking the following address: %s",
     "emailSubject": "Vidmicro Email Verification",
     "emailConfig": {
@@ -45,7 +55,9 @@
         "/api/resetPassword": ["POST"],
         "/api/verifyPasswordHash": ["POST"],
         "/api/googleCallback": ["GET"],
-        "/api/googleLogin": ["GET"]
+        "/api/googleLogin": ["GET"],
+        "/api/twitterCallback": ["GET"],
+        "/api/twitterLogin": ["GET"]
     },
     "passwordTokenExpiry": 20,
     "sessionSecret": "*mongonormalcontrollers.SessionController",

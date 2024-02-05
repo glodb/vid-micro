@@ -81,6 +81,8 @@ const (
 	VALIDATION_FAILED                        = 1065
 	USERNAME_OR_EMAIL_EXISTS                 = 1066
 	SESSION_NOT_PROVIDED                     = 1067
+	TWITTER_LOGIN_FAILED                     = 1068
+	INVALID_OR_EXPIRED_OAUTH_TOKEN           = 1069
 )
 
 type Responses struct {

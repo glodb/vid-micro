@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -27,9 +28,11 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/oauthconfig"
 	"com.code.vidmicro/com.code.vidmicro/settings/oauthconfig/services"
 	"com.code.vidmicro/com.code.vidmicro/settings/s3uploader"
+	"com.code.vidmicro/com.code.vidmicro/settings/twitterauth"
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/mrjones/oauth"
 )
 
 type UserController struct {
@@ -409,6 +412,266 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]interface{}{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "Bearer", "user": session}))
 		} else {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, errors.New("user not found in database"), nil))
+		}
+	}
+}
+
+func (u *UserController) handleTwitterLogin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		consumerkey := twitterauth.GetInstance().TwitterConsumerKey
+		consumersecret := twitterauth.GetInstance().TwitterConsumerSecret
+		requestTokenUrl := twitterauth.GetInstance().TwitterRequestTokenUrl
+		authorizeTokenUrl := twitterauth.GetInstance().TwitterAuthorizeUrl
+		accessTokenUrl := twitterauth.GetInstance().TwitterAccessTokenUrl
+		// callbackUrl := twitterauth.GetInstance().TwitterCallbackUrl
+
+		consumer := oauth.NewConsumer(
+			consumerkey,
+			consumersecret,
+			oauth.ServiceProvider{
+				RequestTokenUrl:   requestTokenUrl,
+				AuthorizeTokenUrl: authorizeTokenUrl,
+				AccessTokenUrl:    accessTokenUrl,
+			},
+		)
+
+		var session models.Session
+		var sessionId string
+		if val, ok := c.Get("session"); ok {
+			session = val.(models.Session)
+		}
+		if val, ok := c.Get("session-id"); ok {
+			sessionId = val.(string)
+		}
+
+		callbackUrl2 := twitterauth.GetInstance().TwitterCallbackUrl + "?state=" + sessionId
+
+		requestToken, url, err := consumer.GetRequestTokenAndUrl(callbackUrl2)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
+
+		session.Token = requestToken.Token
+		session.Password = requestToken.Secret
+
+		err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
+
+		// oauthStore[requestToken.Token] = requestToken.Secret
+
+		log.Println("Authorization URL:", url)
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.URL_GENERATED, err, map[string]interface{}{"authorization_url": url, "request_token": requestToken.Token, "request_secret": requestToken.Secret}))
+	}
+}
+
+func (u *UserController) handleTwitterCallback() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		requestToken := c.Query("oauth_token")
+		requestSecret := c.Query("oauth_verifier")
+		sessionId := c.Query("state")
+
+		var session models.Session
+		data, err := cache.GetInstance().Get(sessionId)
+		if err != nil || len(data) == 0 {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		} else {
+			session.DecodeRedisData(data)
+		}
+
+		if requestToken != session.Token {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.INVALID_OR_EXPIRED_OAUTH_TOKEN, nil, nil))
+			return
+		}
+
+		// configSet, err := oauthconfig.GetInstance().GetOAuth1Config(services.Twitter)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+		// 	return
+		// }
+
+		// Retrieve the corresponding secret from the store
+		// oauthTokenSecret, ok := oauthStore[oauthToken]
+		// if !ok {
+		// 	errorMessage := "Invalid or expired OAuth token"
+		// 	c.JSON(http.StatusBadRequest, errorMessage)
+		// 	return
+		// }
+
+		// Exchange the request token and verifier for an access token
+		consumerkey := twitterauth.GetInstance().TwitterConsumerKey
+		consumersecret := twitterauth.GetInstance().TwitterConsumerSecret
+		requestTokenUrl := twitterauth.GetInstance().TwitterRequestTokenUrl
+		authorizeTokenUrl := twitterauth.GetInstance().TwitterAuthorizeUrl
+		accessTokenUrl := twitterauth.GetInstance().TwitterAccessTokenUrl
+		userURL := twitterauth.GetInstance().TwitterUserInfoUrl
+
+		consumer := oauth.NewConsumer(
+			consumerkey,
+			consumersecret,
+			oauth.ServiceProvider{
+				RequestTokenUrl:   requestTokenUrl,
+				AuthorizeTokenUrl: authorizeTokenUrl,
+				AccessTokenUrl:    accessTokenUrl,
+			},
+		)
+
+		accessToken, err := consumer.AuthorizeToken(&oauth.RequestToken{Token: requestToken},
+			requestSecret,
+		)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
+		}
+
+		// Use the access token to make authenticated requests to the Twitter API
+		httpClient, err := consumer.MakeHttpClient(accessToken)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
+
+		}
+
+		resp, err := httpClient.Get(userURL)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
+		}
+		defer resp.Body.Close()
+
+		responseBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
+		}
+
+		var userInfo map[string]interface{}
+
+		// Unmarshal the JSON into the map
+		err = json.Unmarshal(responseBody, &userInfo)
+		if err != nil {
+			fmt.Println("Error unmarshaling JSON:", err)
+			return
+		}
+
+		// Print the unmarshaled data
+		for key, value := range userInfo {
+			log.Printf("%s: %v\n", key, value)
+		}
+		// var userInfo map[string]interface{}
+		// if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
+		// 	return
+		// }
+
+		// log.Print(userInfo)
+
+		// Upsert query
+		upsertQuery := `
+		INSERT INTO users (email, username, name, avatar_url, password, is_verified, role)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (email) DO UPDATE
+		SET
+			username = $2,
+			avatar_url = $3,
+			is_verified = COALESCE(EXCLUDED.is_verified, users.is_verified);
+		`
+		userInfo["role"] = 20
+		// Execute the upsert query using RawQuery
+		_, err = u.RawQuery(u.GetDBName(), u.GetCollectionName(), upsertQuery, []interface{}{userInfo["email"], userInfo["screen_name"], userInfo["screen_name"], userInfo["profile_image_url_https"], userInfo["id"], true, userInfo["role"]})
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
+			return
+		}
+
+		// Retrieve the user from the database
+		var users []models.User
+		keys := "id, username, name, email, avatar_url, is_verified, salt, role, createdAt, updatedAt"
+		condition := map[string]interface{}{"email": userInfo["email"]}
+		rows, err := u.Find(u.GetDBName(), u.GetCollectionName(), keys, condition, &users, true, "", true)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
+			return
+		}
+		defer rows.Close()
+
+		// Iterate over the rows.
+		for rows.Next() {
+			// Create a User struct to scan values into.
+			var user models.User
+
+			// Scan the row's values into the User struct.
+			avatarUrl := sql.NullString{}
+			err := rows.Scan(&user.Id, &user.Username, &user.Name, &user.Email, &avatarUrl, &user.IsVerified, &user.Salt, &user.Role, &user.CreatedAt, &user.UpdatedAt)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
+				return
+			}
+
+			user.AvatarUrl = avatarUrl.String
+
+			// Append the user to the slice.
+			users = append(users, user)
+		}
+
+		// Check for errors from iterating over rows.
+		if err := rows.Err(); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
+			return
+		}
+
+		if len(users) >= 1 {
+			user := users[0]
+
+			// Generate JWT for the user
+			jwtToken, err := u.generateJWT(configmanager.GetInstance().TokenExpiry)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
+				return
+			}
+
+			// Generate Refresh Token
+			controller, _ := u.BaseControllerFactory.GetController(baseconst.RefreshToken)
+			refreshTokenController := controller.(*RefreshTokensController)
+			refreshToken, err := refreshTokenController.GetRefreshToken(user.Id)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
+				return
+			}
+
+			session.Username = user.Username
+			session.Token = jwtToken
+			session.Name = user.Name
+			session.Email = user.Email
+			session.AvatarUrl = user.AvatarUrl
+			session.IsVerified = user.IsVerified
+			session.Salt = user.Salt
+			session.Role = user.Role
+			session.UserId = int64(user.Id)
+			session.RoleName = cache.GetInstance().HashGet("auth_roles_"+strconv.FormatInt(int64(session.Role), 10), "slug")
+
+			userSessionController, _ := u.BaseControllerFactory.GetController(baseconst.UsersSessions)
+			query := `INSERT INTO users_sessions (user_id, session_id, created_at, expiring_at)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (session_id) DO UPDATE
+			SET user_id = $1;`
+			_, err = userSessionController.RawQuery(userSessionController.GetDBName(), userSessionController.GetCollectionName(), query, []interface{}{user.Id, session.SessionId, session.CreatedAt, session.ExpiringAt})
+
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+				return
+			}
+
+			cache.GetInstance().Set(sessionId, session.EncodeRedisData())
+
+			session.Salt = make([]byte, 0)
+			session.Token = ""
+			session.Password = ""
+			session.SessionId = ""
+			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGIN_SUCCESS, err, map[string]interface{}{"jwtToken": jwtToken, "refreshToken": refreshToken, "username": user.Username, "tokenType": "Bearer", "user": session}))
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, errors.New("user not found in database"), nil))
 		}
 	}
 }
@@ -916,4 +1179,6 @@ func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/verifyPasswordHash", u.handleVerifyPasswordHash())
 	baserouter.GetInstance().GetOpenRouter().GET("/api/googleLogin", u.handleGoogleLogin())
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/googleCallback", u.handleGoogleCallback())
+	baserouter.GetInstance().GetOpenRouter().GET("/api/twitterLogin", u.handleTwitterLogin())
+	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/twitterCallback", u.handleTwitterCallback())
 }
