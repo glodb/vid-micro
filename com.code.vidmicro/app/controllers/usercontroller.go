@@ -418,25 +418,11 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 
 func (u *UserController) handleTwitterLogin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		consumerkey := twitterauth.GetInstance().TwitterConsumerKey
-		consumersecret := twitterauth.GetInstance().TwitterConsumerSecret
-		requestTokenUrl := twitterauth.GetInstance().TwitterRequestTokenUrl
-		authorizeTokenUrl := twitterauth.GetInstance().TwitterAuthorizeUrl
-		accessTokenUrl := twitterauth.GetInstance().TwitterAccessTokenUrl
-		// callbackUrl := twitterauth.GetInstance().TwitterCallbackUrl
-
-		consumer := oauth.NewConsumer(
-			consumerkey,
-			consumersecret,
-			oauth.ServiceProvider{
-				RequestTokenUrl:   requestTokenUrl,
-				AuthorizeTokenUrl: authorizeTokenUrl,
-				AccessTokenUrl:    accessTokenUrl,
-			},
-		)
+		twitterConfig := twitterauth.GetInstance().Twitter()
 
 		var session models.Session
 		var sessionId string
+
 		if val, ok := c.Get("session"); ok {
 			session = val.(models.Session)
 		}
@@ -444,9 +430,9 @@ func (u *UserController) handleTwitterLogin() gin.HandlerFunc {
 			sessionId = val.(string)
 		}
 
-		callbackUrl2 := twitterauth.GetInstance().TwitterCallbackUrl + "?state=" + sessionId
+		callbackURL := twitterauth.GetInstance().GetTwitterCallbackUrl() + "?state=" + sessionId
 
-		requestToken, url, err := consumer.GetRequestTokenAndUrl(callbackUrl2)
+		requestToken, url, err := twitterConfig.GetRequestTokenAndUrl(callbackURL)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
@@ -456,13 +442,10 @@ func (u *UserController) handleTwitterLogin() gin.HandlerFunc {
 		session.Password = requestToken.Secret
 
 		err = cache.GetInstance().Set(sessionId, session.EncodeRedisData())
-
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
-
-		// oauthStore[requestToken.Token] = requestToken.Secret
 
 		log.Println("Authorization URL:", url)
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.URL_GENERATED, err, map[string]interface{}{"authorization_url": url, "request_token": requestToken.Token, "request_secret": requestToken.Secret}))
@@ -488,40 +471,15 @@ func (u *UserController) handleTwitterCallback() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusBadRequest, responses.GetInstance().WriteResponse(c, responses.INVALID_OR_EXPIRED_OAUTH_TOKEN, nil, nil))
 			return
 		}
-
-		// configSet, err := oauthconfig.GetInstance().GetOAuth1Config(services.Twitter)
-		// if err != nil {
-		// 	c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
-		// 	return
-		// }
-
-		// Retrieve the corresponding secret from the store
 		// oauthTokenSecret, ok := oauthStore[oauthToken]
 		// if !ok {
 		// 	errorMessage := "Invalid or expired OAuth token"
 		// 	c.JSON(http.StatusBadRequest, errorMessage)
 		// 	return
 		// }
+		twitterConfig := twitterauth.GetInstance().Twitter()
 
-		// Exchange the request token and verifier for an access token
-		consumerkey := twitterauth.GetInstance().TwitterConsumerKey
-		consumersecret := twitterauth.GetInstance().TwitterConsumerSecret
-		requestTokenUrl := twitterauth.GetInstance().TwitterRequestTokenUrl
-		authorizeTokenUrl := twitterauth.GetInstance().TwitterAuthorizeUrl
-		accessTokenUrl := twitterauth.GetInstance().TwitterAccessTokenUrl
-		userURL := twitterauth.GetInstance().TwitterUserInfoUrl
-
-		consumer := oauth.NewConsumer(
-			consumerkey,
-			consumersecret,
-			oauth.ServiceProvider{
-				RequestTokenUrl:   requestTokenUrl,
-				AuthorizeTokenUrl: authorizeTokenUrl,
-				AccessTokenUrl:    accessTokenUrl,
-			},
-		)
-
-		accessToken, err := consumer.AuthorizeToken(&oauth.RequestToken{Token: requestToken},
+		accessToken, err := twitterConfig.AuthorizeToken(&oauth.RequestToken{Token: requestToken},
 			requestSecret,
 		)
 		if err != nil {
@@ -529,13 +487,15 @@ func (u *UserController) handleTwitterCallback() gin.HandlerFunc {
 		}
 
 		// Use the access token to make authenticated requests to the Twitter API
-		httpClient, err := consumer.MakeHttpClient(accessToken)
+		httpClient, err := twitterConfig.MakeHttpClient(accessToken)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
 
 		}
 
-		resp, err := httpClient.Get(userURL)
+		userUrl := twitterauth.GetInstance().GetTwitterUserInfoUrl()
+
+		resp, err := httpClient.Get(userUrl)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.TWITTER_LOGIN_FAILED, err, nil))
 		}
