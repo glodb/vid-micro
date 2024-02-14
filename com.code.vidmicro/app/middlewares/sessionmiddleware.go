@@ -9,22 +9,51 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/responses"
 	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
+	"com.code.vidmicro/com.code.vidmicro/settings/utils"
 	"github.com/gin-gonic/gin"
 )
 
 type SessionMiddleware struct {
 }
 
+func (u *SessionMiddleware) createSession(c *gin.Context) (models.Session, error) {
+	sessionId, err := utils.GenerateUUID()
+	modelSession := models.Session{
+		SessionId: sessionId,
+	}
+
+	if err != nil {
+		return modelSession, err
+	}
+	now := time.Now().Unix()
+	modelSession.CreatedAt = now
+	modelSession.ExpiringAt = now + configmanager.GetInstance().SessionExpirySeconds
+	err = cache.GetInstance().Set(sessionId, modelSession.EncodeRedisData())
+
+	if err != nil {
+		return modelSession, err
+	}
+
+	err = cache.GetInstance().Expire(sessionId, int(configmanager.GetInstance().SessionExpirySeconds))
+	if err != nil {
+		return modelSession, err
+	}
+
+	// Set a cookie
+	c.SetCookie(configmanager.GetInstance().CookieName, sessionId, int(configmanager.GetInstance().SessionExpirySeconds), configmanager.GetInstance().CookiePath, configmanager.GetInstance().CookieDomain, false, true)
+	return modelSession, nil
+}
+
 func (u *SessionMiddleware) getCookieSession(c *gin.Context) (models.Session, error) {
 	cookieValue, err := c.Cookie(configmanager.GetInstance().CookieName)
 
 	if err != nil {
-		return models.Session{}, err
+		return u.createSession(c)
 	}
 	var session models.Session
 	data, err := cache.GetInstance().Get(cookieValue)
 	if err != nil || len(data) == 0 {
-		return models.Session{}, errors.New("cookie not valid")
+		return u.createSession(c)
 	} else {
 		session.DecodeRedisData(data)
 	}

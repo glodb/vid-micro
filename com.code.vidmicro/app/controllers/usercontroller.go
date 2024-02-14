@@ -904,6 +904,21 @@ func (u *UserController) handleVerifyPasswordHash() gin.HandlerFunc {
 	}
 }
 
+func (u *UserController) handleLogoutUser() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sessionId := c.GetString("session-id")
+		err := cache.GetInstance().Del(sessionId)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
+		c.SetCookie(configmanager.GetInstance().CookieName, sessionId, -1, configmanager.GetInstance().CookiePath, configmanager.GetInstance().CookieDomain, false, true)
+
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.LOGOUT_SUCCESS, err, nil))
+	}
+}
+
 func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetOpenRouter().POST("/api/signup", u.handleRegisterUser())
 	baserouter.GetInstance().GetOpenRouter().POST("/api/login", u.handleLogin())
@@ -911,6 +926,7 @@ func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetLoginRouter().GET("/api/getUser", u.handleGetUser())
 	baserouter.GetInstance().GetLoginRouter().POST("/api/blackListUser", u.handleBlackListUser())
 	baserouter.GetInstance().GetLoginRouter().POST("/api/editUser", u.handleEditUser())
+	baserouter.GetInstance().GetLoginRouter().GET("/api/logout", u.handleLogoutUser())
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/verifyEmail/:token", u.handleVerifyEmail())
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/resetPassword", u.handleResetPassword())
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/verifyPasswordHash", u.handleVerifyPasswordHash())

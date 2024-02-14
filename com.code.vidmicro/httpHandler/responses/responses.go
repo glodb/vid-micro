@@ -26,7 +26,7 @@ const (
 	SERVER_ERROR                             = 1010
 	DB_ERROR                                 = 1011
 	CREATE_HASH_FAILED                       = 1012
-	BASIC_AUTH_FAILED                        = 1013
+	BEARER_AUTH_FAILED                       = 1013
 	GET_USER_SUCCESS                         = 1014
 	GET_USER_FAILED                          = 1015
 	USERNAME_EXISTS_FAILED                   = 1016
@@ -81,6 +81,7 @@ const (
 	VALIDATION_FAILED                        = 1065
 	USERNAME_OR_EMAIL_EXISTS                 = 1066
 	SESSION_NOT_PROVIDED                     = 1067
+	LOG_OUT_SUCCESS                          = 1068
 )
 
 type Responses struct {
@@ -117,7 +118,7 @@ func (u *Responses) InitResponses() {
 	u.responses[SERVER_ERROR] = "Server Error"
 	u.responses[DB_ERROR] = "DB Error in query"
 	u.responses[CREATE_HASH_FAILED] = "Failed creating hash"
-	u.responses[BASIC_AUTH_FAILED] = "Basic auth failed"
+	u.responses[BEARER_AUTH_FAILED] = "Invalid Bearer token failure"
 	u.responses[GET_USER_SUCCESS] = "Success in getting user"
 	u.responses[GET_USER_FAILED] = "Failure in getting user"
 	u.responses[USERNAME_EXISTS_FAILED] = "Username entered does not exist"
@@ -169,6 +170,7 @@ func (u *Responses) InitResponses() {
 	u.responses[URL_GENERATED] = "URL_GENERATED"
 	u.responses[USERNAME_EXISTS_FAILED] = "User name or email already exists"
 	u.responses[VALIDATION_FAILED] = "Validation failed on the field"
+	u.responses[LOG_OUT_SUCCESS] = "Log out success"
 }
 
 // GetResponse returns the message for the particular response code

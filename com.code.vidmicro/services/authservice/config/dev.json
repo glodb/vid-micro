@@ -45,7 +45,8 @@
         "/api/resetPassword": ["POST"],
         "/api/verifyPasswordHash": ["POST"],
         "/api/googleCallback": ["GET"],
-        "/api/googleLogin": ["GET"]
+        "/api/googleLogin": ["GET"],
+        "/api/logout": ["GET"]
     },
     "passwordTokenExpiry": 20,
     "sessionSecret": "*mongonormalcontrollers.SessionController",
@@ -53,16 +54,19 @@
     "acl": {
         "user": {
             "/api/getUser": ["GET"],
-            "/api/editUser":["POST"]
+            "/api/editUser":["POST"],
+            "/api/logout": ["GET"]
         },
         "admin": {
             "/api/getUser": ["GET"],
             "/api/editUser":["POST"],
-            "/api/blackListUser":["POST"]
+            "/api/blackListUser":["POST"],
+            "/api/logout": ["GET"]
         },
         "manager": {
             "/api/getUser": ["GET"],
-            "/api/editUser":["POST"]
+            "/api/editUser":["POST"],
+            "/api/logout": ["GET"]
         }
     },
     "sessionExpirySeconds":6000000,
