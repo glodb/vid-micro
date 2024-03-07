@@ -2,13 +2,18 @@ package controllers
 
 import (
 	//"com.code.vidmicro/com.code.vidmicro/app/middlewares"
+	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -30,6 +35,7 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/settings/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/oauth2"
 )
 
 type UserController struct {
@@ -919,6 +925,111 @@ func (u *UserController) handleLogoutUser() gin.HandlerFunc {
 	}
 }
 
+func (u *UserController) generateRandomString(length int) (string, error) {
+	bytes := make([]byte, length)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes)[:length], nil
+}
+
+func (u *UserController) handleTwitterLogin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		configSet, err := oauthconfig.GetInstance().GetOAuth2Config(services.Twitter)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
+
+		sessionId := ""
+		if val, ok := c.Get("session-id"); ok {
+			sessionId = val.(string)
+		}
+
+		// codeChallenge, err := u.generateRandomString(43) // 43 bytes base64 URL encoded = 32 bytes random + padding
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
+
+		// Build the authorization URL with the generated state and code challenge
+		// url := configSet.AuthCodeURL(sessionId) // oauth2.SetAuthURLParam("code_challenge", codeChallenge),
+		// oauth2.SetAuthURLParam("code_challenge_method", "plain"),
+
+		url := configSet.AuthCodeURL(sessionId,
+			oauth2.SetAuthURLParam("code_challenge", "codeChallenge"),
+			oauth2.SetAuthURLParam("code_challenge_method", "plain"),
+		)
+
+		log.Println("Generated URL:", url)
+		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.URL_GENERATED, err, map[string]interface{}{"redirect_url": url}))
+	}
+}
+
+func (u *UserController) handleTwitterCallback() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		state := c.Query("state")
+		if state == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid state parameter"})
+			return
+		}
+
+		code := c.Query("code")
+
+		authString := configmanager.GetInstance().TwitterLoginConfig.ClientId + ":" + configmanager.GetInstance().TwitterLoginConfig.ClientSecret
+		basicAuth := base64.StdEncoding.EncodeToString([]byte(authString))
+
+		data := url.Values{}
+		data.Set("code", code)
+		data.Set("grant_type", "authorization_code")
+		data.Set("client_id", configmanager.GetInstance().TwitterLoginConfig.ClientId)
+		data.Set("redirect_uri", configmanager.GetInstance().TwitterLoginConfig.RedirectUrl)
+		data.Set("code_verifier", "codeChallenge")
+
+		// Create a new request
+		req, err := http.NewRequest("POST", "https://api.twitter.com/2/oauth2/token", bytes.NewBufferString(data.Encode()))
+		if err != nil {
+			fmt.Println("Error creating request:", err)
+			return
+		}
+
+		// Set the Content-Type header
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Authorization", "Basic "+basicAuth)
+
+		// Send the request
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println("Error sending request:", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		// Read the response
+		fmt.Println("Response status:", resp.Status)
+		// Print the response body
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(resp.Body)
+		fmt.Println("Response body:", buf.String())
+
+		// authCode := c.Query("auth_code")
+		// configSet, err := oauthconfig.GetInstance().GetOAuth2Config(services.Twitter)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+		// 	return
+		// }
+		// log.Println(authCode)
+		// token, err := configSet.Exchange(context.Background(), code)
+		// if err != nil {
+		// 	c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.GOOGLE_LOGIN_FAILED, err, nil))
+		// 	return
+		// }
+
+	}
+}
+
 func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetOpenRouter().POST("/api/signup", u.handleRegisterUser())
 	baserouter.GetInstance().GetOpenRouter().POST("/api/login", u.handleLogin())
@@ -932,4 +1043,6 @@ func (u *UserController) RegisterApis() {
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).POST("/api/verifyPasswordHash", u.handleVerifyPasswordHash())
 	baserouter.GetInstance().GetOpenRouter().GET("/api/googleLogin", u.handleGoogleLogin())
 	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/googleCallback", u.handleGoogleCallback())
+	baserouter.GetInstance().GetOpenRouter().GET("/api/twitterLogin", u.handleTwitterLogin())
+	baserouter.GetInstance().GetBaseRouter(configmanager.GetInstance().SessionKey).GET("/api/twitterCallback", u.handleTwitterCallback())
 }

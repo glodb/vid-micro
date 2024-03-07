@@ -14,8 +14,9 @@ import (
 	"com.code.vidmicro/com.code.vidmicro/httpHandler/responses"
 	"com.code.vidmicro/com.code.vidmicro/settings/cache"
 	"com.code.vidmicro/com.code.vidmicro/settings/configmanager"
-	"com.code.vidmicro/com.code.vidmicro/settings/utils"
+	"com.code.vidmicro/com.code.vidmicro/settings/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/securecookie"
 )
 
 type SessionController struct {
@@ -51,9 +52,14 @@ func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 			return
 		}
 
-		sessionId, err := utils.GenerateUUID()
+		cookieKey, err := cookie.GetInstance().GetCookie().Encode(configmanager.GetInstance().CookieName, securecookie.GenerateRandomKey(64))
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
+			return
+		}
 		modelSession := models.Session{
-			SessionId: sessionId,
+			SessionId: cookieKey,
+			CookieKey: cookieKey,
 		}
 
 		if err != nil {
@@ -63,21 +69,21 @@ func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 		now := time.Now().Unix()
 		modelSession.CreatedAt = now
 		modelSession.ExpiringAt = now + configmanager.GetInstance().SessionExpirySeconds
-		err = cache.GetInstance().Set(sessionId, modelSession.EncodeRedisData())
+		err = cache.GetInstance().Set(cookieKey, modelSession.EncodeRedisData())
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
-		err = cache.GetInstance().Expire(sessionId, int(configmanager.GetInstance().SessionExpirySeconds))
+		err = cache.GetInstance().Expire(cookieKey, int(configmanager.GetInstance().SessionExpirySeconds))
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 
 		// Set a cookie
-		c.SetCookie(configmanager.GetInstance().CookieName, sessionId, int(configmanager.GetInstance().SessionExpirySeconds), configmanager.GetInstance().CookiePath, configmanager.GetInstance().CookieDomain, false, true)
+		c.SetCookie(configmanager.GetInstance().CookieName, cookieKey, int(configmanager.GetInstance().SessionExpirySeconds), configmanager.GetInstance().CookiePath, configmanager.GetInstance().CookieDomain, false, true)
 
 		c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_SESSION_SUCCESS, err, modelSession))
 	}

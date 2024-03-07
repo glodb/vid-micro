@@ -24,6 +24,7 @@ type Session struct {
 	Salt         []byte `json:"salt,omitempty"`
 	Role         int    `json:"role,omitempty"`
 	RoleName     string `json:"roleName,omitempty"`
+	CookieKey    string `json:"cookieKey,omitempty"`
 	LastActivity int64  `json:"lastActivity,omitempty"`
 	CreatedAt    int64  `json:"createdAt,omitempty"`
 	ExpiringAt   int64  `json:"expiringAt,omitempty"`

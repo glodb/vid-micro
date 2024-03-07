@@ -32,7 +32,17 @@
         "clientSecret": "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",
         "RedirectURL": "http://localhost:8080/api/googleCallback",
         "scopes": ["https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email"]
-    },    
+    },
+    "twitterLoginConfig": {        
+        "clientId": "azFiYjR0RXI0SDJQLVFxOUc0dS06MTpjaQ",
+        "clientSecret": "OiLPYzmj6DjXIieQ6NenvdDKKuGmK1I0Ytjx0wSmVoIn3nh2G5",
+        "redirectUrl": "http://127.0.0.1:8080/api/twitterCallback",
+        "scopes": ["tweet.read", "users.read", "offline.access"],
+        "authUrl": "https://twitter.com/i/oauth2/authorize",
+        "tokenUrl": "https://api.twitter.com/oauth2/token",
+        "codeChallengeMethod": "plain",
+        "userInfoUrl": "https://api.twitter.com/2/users/me"
+    },   
     "apis": {
         "/api/getSession":["GET"],
         "/api/signup":["POST"],
@@ -46,7 +56,9 @@
         "/api/verifyPasswordHash": ["POST"],
         "/api/googleCallback": ["GET"],
         "/api/googleLogin": ["GET"],
-        "/api/logout": ["GET"]
+        "/api/logout": ["GET"],
+        "/api/twitterLogin": ["GET"],
+        "/api/twitterCallback": ["GET"]
     },
     "passwordTokenExpiry": 20,
     "sessionSecret": "*mongonormalcontrollers.SessionController",
@@ -74,5 +86,7 @@
     "googleUserInfoLink" : "https://www.googleapis.com/oauth2/v2/userinfo",
     "cookieDomain":"localhost",
     "cookiePath":"/",
-    "allowUnverified": true
+    "allowUnverified": true,
+    "secureCookieHash": "VeqZ*YwT9vJhtp3hR!LKsfmPJWv2MnZyGk+5IxHT1SCwAlJ9Q+FePY1GmUq+v3L*P9jMN5dfLgN7xLKIkIzBdwF1lUaBWz6oZ#uy",
+    "secureCookieBlock":"R9$yfA7L*%nUhQpCj2dL0E4m1oZ5vGh8"
 }
