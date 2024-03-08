@@ -52,14 +52,15 @@ func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 			return
 		}
 
-		cookieKey, err := cookie.GetInstance().GetCookie().Encode(configmanager.GetInstance().CookieName, securecookie.GenerateRandomKey(64))
+		cookieValue := securecookie.GenerateRandomKey(64)
+		cookieKey, err := cookie.GetInstance().GetCookie().Encode(configmanager.GetInstance().CookieName, cookieValue)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responses.GetInstance().WriteResponse(c, responses.SERVER_ERROR, err, nil))
 			return
 		}
 		modelSession := models.Session{
-			SessionId: cookieKey,
-			CookieKey: cookieKey,
+			SessionId:   cookieKey,
+			CookieValue: cookieValue,
 		}
 
 		if err != nil {

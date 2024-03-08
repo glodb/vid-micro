@@ -2,7 +2,6 @@ package middlewares
 
 import (
 	"errors"
-	"log"
 	"net/http"
 	"time"
 
@@ -84,7 +83,6 @@ func (u *SessionMiddleware) GetHandlerFunc() gin.HandlerFunc {
 		if localCookie, err := c.Cookie(configmanager.GetInstance().CookieName); err == nil {
 			value := make([]byte, 0)
 			if err = cookie.GetInstance().GetCookie().Decode(configmanager.GetInstance().CookieName, localCookie, &value); err == nil {
-				log.Println(string(localCookie))
 				var session models.Session
 				data, err := cache.GetInstance().Get(string(localCookie))
 				if err != nil || len(data) == 0 {
@@ -92,6 +90,10 @@ func (u *SessionMiddleware) GetHandlerFunc() gin.HandlerFunc {
 					return
 				} else {
 					session.DecodeRedisData(data)
+					if string(session.CookieValue) != string(value) {
+						c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.SESSION_NOT_PROVIDED, err, nil))
+						return
+					}
 				}
 				if session.BlackListed {
 					c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.SESSION_NOT_FOUND, errors.New("session is blacklisted"), nil))
