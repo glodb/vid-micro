@@ -48,8 +48,9 @@ func (u *SessionController) handleCreateSession() gin.HandlerFunc {
 		savedModel, err := u.retrieveCookie(c)
 
 		if err == nil {
-			c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_SESSION_SUCCESS, err, savedModel))
-			return
+			// c.AbortWithStatusJSON(http.StatusOK, responses.GetInstance().WriteResponse(c, responses.CREATE_SESSION_SUCCESS, err, savedModel))
+			// return
+			cache.GetInstance().Del(savedModel.SessionId)
 		}
 
 		cookieValue := securecookie.GenerateRandomKey(64)
