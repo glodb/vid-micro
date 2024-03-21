@@ -86,7 +86,5 @@
     "googleUserInfoLink" : "https://www.googleapis.com/oauth2/v2/userinfo",
     "cookieDomain":"localhost",
     "cookiePath":"/",
-    "allowUnverified": true,
-    "secureCookieHash": "VeqZ*YwT9vJhtp3hR!LKsfmPJWv2MnZyGk+5IxHT1SCwAlJ9Q+FePY1GmUq+v3L*P9jMN5dfLgN7xLKIkIzBdwF1lUaBWz6oZ#uy",
-    "secureCookieBlock":"R9$yfA7L*%nUhQpCj2dL0E4m1oZ5vGh8"
+    "allowUnverified": true
 }
