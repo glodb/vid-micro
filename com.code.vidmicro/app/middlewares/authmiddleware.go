@@ -25,6 +25,7 @@ func (u *AuthMiddleware) GetHandlerFunc() gin.HandlerFunc {
 			auth := strings.SplitN(c.Request.Header.Get("Authorization"), " ", 2)
 			if len(auth) != 2 || auth[0] != "Bearer" {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.BEARER_AUTH_FAILED, nil, nil))
+				return
 			}
 
 			if u.validate(auth[1], c, session) {
