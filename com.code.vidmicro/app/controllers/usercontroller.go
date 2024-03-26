@@ -169,6 +169,7 @@ func (u *UserController) handleRegisterUser() gin.HandlerFunc {
 		}
 		session.Username = modelUser.Username
 		session.Token = jwtToken
+		session.IsAuthenticated = true
 		session.Name = modelUser.Name
 		session.Email = modelUser.Email
 		session.AvatarUrl = modelUser.AvatarUrl
@@ -385,6 +386,8 @@ func (u *UserController) handleGoogleCallback() gin.HandlerFunc {
 
 			session.Username = user.Username
 			session.Token = jwtToken
+			session.IsAuthenticated = true
+			session.IsAuthenticated = true
 			session.Name = user.Name
 			session.Email = user.Email
 			session.AvatarUrl = user.AvatarUrl

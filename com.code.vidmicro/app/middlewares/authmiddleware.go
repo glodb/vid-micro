@@ -16,31 +16,36 @@ type AuthMiddleware struct {
 func (u *AuthMiddleware) GetHandlerFunc() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		auth := strings.SplitN(c.Request.Header.Get("Authorization"), " ", 2)
-		if len(auth) != 2 || auth[0] != "Bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.BEARER_AUTH_FAILED, nil, nil))
-		}
+		sessionGeneric, _ := c.Get("session")
+		session := sessionGeneric.(models.Session)
 
-		if u.validate(auth[1], c) {
-			ok, err := utils.IsTokenValid(strings.TrimSpace(auth[1]))
-
-			if ok && err == nil {
-
-				c.Set("token", strings.TrimSpace(auth[1]))
-				c.Next()
-			} else {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.TOKEN_EXPIRED, nil, nil))
-			}
+		if session.IsAuthenticated {
+			c.Next()
 		} else {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.BEARER_AUTH_FAILED, nil, nil))
+			auth := strings.SplitN(c.Request.Header.Get("Authorization"), " ", 2)
+			if len(auth) != 2 || auth[0] != "Bearer" {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.BEARER_AUTH_FAILED, nil, nil))
+			}
+
+			if u.validate(auth[1], c, session) {
+				ok, err := utils.IsTokenValid(strings.TrimSpace(auth[1]))
+
+				if ok && err == nil {
+
+					c.Set("token", strings.TrimSpace(auth[1]))
+					c.Next()
+				} else {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.TOKEN_EXPIRED, nil, nil))
+				}
+			} else {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, responses.GetInstance().WriteResponse(c, responses.BEARER_AUTH_FAILED, nil, nil))
+			}
 		}
 	}
 }
 
-func (u *AuthMiddleware) validate(password string, c *gin.Context) bool {
+func (u *AuthMiddleware) validate(password string, c *gin.Context, session models.Session) bool {
 	//If it passes session middleware means session exists
-	sessionGeneric, _ := c.Get("session")
-	session := sessionGeneric.(models.Session)
 
 	if session.Token == password {
 		c.Set("userId", session.UserId)
